@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bongdaha Admin</title>
+  <!-- Remove Tailwind CDN for production -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Configuration -->
+  <script src="config.js"></script>
+  <!-- Editor.js Core and Tools -->
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.0/dist/editorjs.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.1/dist/header.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.9.0/dist/list.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/quote@2.6.0/dist/quote.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/code@2.9.0/dist/code.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/delimiter@1.4.0/dist/delimiter.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/image@2.9.0/dist/image.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/table@2.3.0/dist/table.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/inline-code@1.5.0/dist/inline-code.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/marker@1.4.0/dist/marker.umd.min.js"></script>
+</head>
+<body>
+  <!-- Login Page -->
+  <div id="login-page" class="login-container">
+    <div class="login-box">
+      <div class="login-header">
+        <img src="/logo.svg" alt="Bongdaha" class="login-logo" />
+        <h1>Admin Panel</h1>
+      </div>
+      <form id="login-form">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="login-username" placeholder="Enter username" required />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="Enter password" required />
+        </div>
+        <button type="submit" class="btn-primary">
+          <i class="fa-solid fa-right-to-bracket mr-2"></i> Login
+        </button>
+        <div id="login-error" class="error-msg hidden"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Dashboard -->
+  <div id="admin-app" class="admin-container hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img src="/logo.svg" alt="Bongdaha" class="sidebar-logo" />
+      </div>
+      <nav class="sidebar-nav">
+        <!-- 主视图 -->
+        <div class="nav-group">
+          <a href="#" class="nav-item active" data-page="dashboard">
+            <i class="fa-solid fa-chart-line"></i>
+            <span class="nav-text">Dashboard</span>
+          </a>
+        </div>
+
+        <!-- 访客统计 -->
+        <div class="nav-group">
+          <div class="nav-group-header" data-group="visitors">
+            <i class="fa-solid fa-users"></i>
+            <span class="nav-text">Visitor Statistics</span>
+            <i class="fa-solid fa-chevron-down nav-arrow"></i>
+          </div>
+          <div class="nav-group-menu" data-group="visitors">
+            <a href="#" class="nav-item sub-item" data-page="visitors">
+              <i class="fa-solid fa-chart-pie"></i>
+              <span class="nav-text">Statistics Overview</span>
+            </a>
+            <a href="#" class="nav-item sub-item" data-page="visitor-list">
+              <i class="fa-solid fa-list"></i>
+              <span class="nav-text">Visitor Details</span>
+            </a>
+          </div>
+          <!-- Hover submenu for collapsed state -->
+          <div class="nav-hover-menu" data-group="visitors">
+            <div class="hover-menu-title">Visitor Statistics</div>
+            <a href="#" class="hover-menu-item" data-page="visitors">
+              <i class="fa-solid fa-chart-pie"></i> Statistics Overview
+            </a>
+            <a href="#" class="hover-menu-item" data-page="visitor-list">
+              <i class="fa-solid fa-list"></i> Visitor Details
+            </a>
+          </div>
+        </div>
+
+        <!-- 内容管理 -->
+        <div class="nav-group">
+          <div class="nav-group-header" data-group="content">
+            <i class="fa-solid fa-newspaper"></i>
+            <span class="nav-text">Content Management</span>
+            <i class="fa-solid fa-chevron-down nav-arrow"></i>
+          </div>
+          <div class="nav-group-menu" data-group="content">
+            <a href="#" class="nav-item sub-item" data-page="articles">
+              <i class="fa-solid fa-file-alt"></i>
+              <span class="nav-text">Articles</span>
+            </a>
+            <a href="#" class="nav-item sub-item" data-page="images">
+              <i class="fa-solid fa-images"></i>
+              <span class="nav-text">Batch Management</span>
+            </a>
+            <a href="#" class="nav-item sub-item" data-page="categories">
+              <i class="fa-solid fa-folder"></i>
+              <span class="nav-text">Categories</span>
+            </a>
+          </div>
+          <!-- Hover submenu for collapsed state -->
+          <div class="nav-hover-menu" data-group="content">
+            <div class="hover-menu-title">Content Management</div>
+            <a href="#" class="hover-menu-item" data-page="articles">
+              <i class="fa-solid fa-file-alt"></i> Articles
+            </a>
+            <a href="#" class="hover-menu-item" data-page="images">
+              <i class="fa-solid fa-images"></i> Batch Management
+            </a>
+            <a href="#" class="hover-menu-item" data-page="categories">
+              <i class="fa-solid fa-folder"></i> Categories
+            </a>
+          </div>
+        </div>
+
+        <!-- 系统设置 -->
+        <div class="nav-group">
+          <div class="nav-group-header" data-group="system">
+            <i class="fa-solid fa-cog"></i>
+            <span class="nav-text">System Settings</span>
+            <i class="fa-solid fa-chevron-down nav-arrow"></i>
+          </div>
+          <div class="nav-group-menu" data-group="system">
+            <a href="#" class="nav-item sub-item" data-page="settings">
+              <i class="fa-solid fa-sliders"></i>
+              <span class="nav-text">System Settings</span>
+            </a>
+            <a href="#" class="nav-item sub-item" data-page="blacklist">
+              <i class="fa-solid fa-ban"></i>
+              <span class="nav-text">Blacklist</span>
+            </a>
+            <a href="#" class="nav-item sub-item" data-page="whitelist">
+              <i class="fa-solid fa-shield"></i>
+              <span class="nav-text">Whitelist</span>
+            </a>
+            <a href="#" class="nav-item sub-item" data-page="password">
+              <i class="fa-solid fa-key"></i>
+              <span class="nav-text">Change Password</span>
+            </a>
+          </div>
+          <!-- Hover submenu for collapsed state -->
+          <div class="nav-hover-menu" data-group="system">
+            <div class="hover-menu-title">System Settings</div>
+            <a href="#" class="hover-menu-item" data-page="settings">
+              <i class="fa-solid fa-sliders"></i> System Settings
+            </a>
+            <a href="#" class="hover-menu-item" data-page="blacklist">
+              <i class="fa-solid fa-ban"></i> Blacklist
+            </a>
+            <a href="#" class="hover-menu-item" data-page="whitelist">
+              <i class="fa-solid fa-shield"></i> Whitelist
+            </a>
+            <a href="#" class="hover-menu-item" data-page="password">
+              <i class="fa-solid fa-key"></i> Change Password
+            </a>
+          </div>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="logout-btn" class="logout-btn">
+          <i class="fa-solid fa-sign-out-alt"></i>
+          <span class="nav-text">Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="top-header">
+        <h2 id="page-title">Dashboard</h2>
+        <div class="header-actions">
+          <span id="admin-username" class="admin-name"></span>
+        </div>
+      </header>
+
+      <div class="content-area">
+        <!-- Dashboard Page -->
+        <div id="page-dashboard" class="page active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon bg-green"><i class="fa-solid fa-eye"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="today-pv">0</span>
+                <span class="stat-label">Today PV</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-blue"><i class="fa-solid fa-users"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="today-uv">0</span>
+                <span class="stat-label">Today UV</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-purple"><i class="fa-solid fa-globe"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="today-ips">0</span>
+                <span class="stat-label">Unique IPs</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats-grid mt-6">
+            <div class="stat-card">
+              <div class="stat-icon bg-teal"><i class="fa-solid fa-file-alt"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="total-articles">0</span>
+                <span class="stat-label">Total Articles</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-cyan"><i class="fa-solid fa-check-circle"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="published-articles">0</span>
+                <span class="stat-label">Published</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-pink"><i class="fa-solid fa-tags"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="total-categories">0</span>
+                <span class="stat-label">Categories</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-red"><i class="fa-solid fa-ban"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="blacklist-count">0</span>
+                <span class="stat-label">Blacklisted</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-section mt-6">
+            <div class="section-header">
+              <h3>Traffic Trend (Last 7 Days)</h3>
+            </div>
+            <div class="chart-container">
+              <canvas id="trend-chart"></canvas>
+            </div>
+          </div>
+
+          <div class="table-section mt-6">
+            <div class="section-header">
+              <h3>Recent Visitors</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+              <thead>
+                <tr>
+                  <th>IP</th>
+                  <th>Page</th>
+                  <th>Device</th>
+                  <th>Browser</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody id="recent-visitors"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visitor Statistics Page -->
+        <div id="page-visitors" class="page">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon bg-green"><i class="fa-solid fa-eye"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="vs-today-pv">0</span>
+                <span class="stat-label">Today PV</span>
+              </div>
+              <div class="stat-compare" id="vs-pv-compare"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-blue"><i class="fa-solid fa-user"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="vs-today-uv">0</span>
+                <span class="stat-label">Today UV (Unique IPs)</span>
+              </div>
+              <div class="stat-compare" id="vs-uv-compare"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-purple"><i class="fa-solid fa-user-plus"></i></div>
+              <div class="stat-info">
+                <span class="stat-value" id="vs-today-new">0</span>
+                <span class="stat-label">New Visitors</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats-grid mt-4" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="stat-card">
+              <h4 style="color:var(--muted);font-size:12px;margin-bottom:10px;">Yesterday</h4>
+              <div class="stat-row">
+                <div><span class="stat-value" id="vs-yesterday-pv">0</span><span class="stat-label">PV</span></div>
+                <div><span class="stat-value" id="vs-yesterday-uv">0</span><span class="stat-label">UV</span></div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <h4 style="color:var(--muted);font-size:12px;margin-bottom:10px;">Last 7 Days</h4>
+              <div class="stat-row">
+                <div><span class="stat-value" id="vs-7d-pv">0</span><span class="stat-label">PV</span></div>
+                <div><span class="stat-value" id="vs-7d-uv">0</span><span class="stat-label">UV</span></div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <h4 style="color:var(--muted);font-size:12px;margin-bottom:10px;">Last 30 Days</h4>
+              <div class="stat-row">
+                <div><span class="stat-value" id="vs-30d-pv">0</span><span class="stat-label">PV</span></div>
+                <div><span class="stat-value" id="vs-30d-uv">0</span><span class="stat-label">UV</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-section mt-6">
+            <div class="section-header">
+              <h3><i class="fa-solid fa-chart-line"></i> Traffic Trend (Last 7 Days)</h3>
+            </div>
+            <div class="chart-container" style="height:280px;">
+              <canvas id="visitor-trend-chart"></canvas>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-6">
+            <div class="chart-section">
+              <div class="section-header">
+                <h3><i class="fa-solid fa-clock"></i> 24-Hour UV Distribution</h3>
+              </div>
+              <div class="chart-container" style="height:250px;">
+                <canvas id="hourly-chart"></canvas>
+              </div>
+            </div>
+            <div class="chart-section">
+              <div class="section-header">
+                <h3><i class="fa-solid fa-globe"></i> Country Distribution</h3>
+              </div>
+              <div class="chart-container" style="height:250px;padding:15px;">
+                <div id="country-stats" class="stat-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-6">
+            <div class="chart-section">
+              <div class="section-header">
+                <h3><i class="fa-solid fa-mobile-screen"></i> Device Distribution</h3>
+              </div>
+              <div class="chart-container" style="height:250px;">
+                <canvas id="device-pie-chart"></canvas>
+              </div>
+            </div>
+            <div class="chart-section">
+              <div class="section-header">
+                <h3><i class="fa-solid fa-globe"></i> Browser Distribution</h3>
+              </div>
+              <div class="chart-container" style="height:250px;">
+                <canvas id="browser-pie-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-6">
+            <div class="card">
+              <h4><i class="fa-solid fa-link"></i> Traffic Sources</h4>
+              <div id="referrer-stats" class="stat-list" style="max-height:280px;overflow-y:auto;"></div>
+            </div>
+            <div class="card">
+              <h4><i class="fa-solid fa-fire"></i> Top Pages</h4>
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>Page</th><th>PV</th><th>UV</th></tr>
+                  </thead>
+                  <tbody id="top-pages"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visitor List Page -->
+        <div id="page-visitor-list" class="page">
+          <div class="toolbar">
+            <input type="date" id="visitor-date-filter" class="form-input" />
+            <button id="filter-visitors-btn" class="btn-secondary">Filter</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>IP</th>
+                  <th>Page</th>
+                  <th>Device</th>
+                  <th>OS</th>
+                  <th>Browser</th>
+                  <th>Location</th>
+                  <th>Visit Time</th>
+                  <th>Duration</th>
+                  <th>PV</th>
+                </tr>
+              </thead>
+              <tbody id="visitor-list-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="visitor-pagination"></div>
+        </div>
+
+        <!-- Articles Page -->
+        <div id="page-articles" class="page">
+          <div class="toolbar">
+            <button id="new-article-btn" class="btn-primary"><i class="fa-solid fa-plus"></i> New Article</button>
+            <select id="article-category-filter" class="form-select">
+              <option value="">All Categories</option>
+            </select>
+            <select id="article-status-filter" class="form-select">
+              <option value="">All Status</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+            </select>
+            <input type="text" id="article-search" class="form-input" placeholder="Search..." />
+            <button id="batch-delete-btn" class="btn-danger hidden"><i class="fa-solid fa-trash"></i> Delete Selected</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all-articles" /></th>
+                  <th>Title</th>
+                  <th>Slug</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Views</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="articles-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="articles-pagination"></div>
+        </div>
+
+        <!-- Article Editor Page -->
+        <div id="page-article-editor" class="page">
+          <div class="editor-layout">
+            <div class="editor-main">
+              <div class="title-input-wrapper">
+                <input type="text" id="article-title" class="title-input" placeholder="Enter article title..." />
+              </div>
+              <div class="slug-input-wrapper">
+                <label class="slug-label"><i class="fa-solid fa-link"></i> Slug (URL) <span class="required">*</span></label>
+                <input type="text" id="article-slug" class="slug-input" placeholder="article-url-slug (required)" required />
+                <small class="slug-hint">URL-friendly identifier. Use lowercase letters, numbers, and hyphens only.</small>
+              </div>
+              <div class="summary-input-wrapper">
+                <textarea id="article-summary" class="summary-input" rows="2" placeholder="Brief summary of the article..."></textarea>
+              </div>
+              <div class="editor-wrapper">
+                <div class="editor-label"><i class="fa-solid fa-pencil"></i> Content</div>
+                <div id="editorjs"></div>
+              </div>
+              <input type="hidden" id="article-content-html" />
+              <input type="hidden" id="article-content-json" />
+            </div>
+            <div class="editor-sidebar">
+              <div class="settings-card">
+                <div class="settings-card-header"><i class="fa-solid fa-gear"></i> Publish Settings</div>
+                <div class="settings-card-body">
+                  <div class="setting-item">
+                    <div class="setting-label">Category</div>
+                    <select id="article-category" class="form-control"></select>
+                  </div>
+                  <div class="setting-item">
+                    <div class="setting-switch">
+                      <label class="switch-label">
+                        <input type="checkbox" id="article-published" class="switch-input" />
+                        <span class="switch-slider"></span>
+                        <span class="switch-text">Published</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <div class="setting-switch">
+                      <label class="switch-label">
+                        <input type="checkbox" id="article-recommended" class="switch-input" />
+                        <span class="switch-slider"></span>
+                        <span class="switch-text">Recommended</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-card">
+                <div class="settings-card-header"><i class="fa-solid fa-image"></i> Cover Image</div>
+                <div class="settings-card-body">
+                  <div class="cover-upload-area" id="coverUploadArea">
+                    <div class="cover-preview" id="coverPreview" style="display:none;">
+                      <img src="" alt="Cover" id="coverPreviewImg" />
+                      <button type="button" class="cover-remove" id="coverRemove"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                    <div class="cover-placeholder" id="coverPlaceholder">
+                      <i class="fa-solid fa-cloud-arrow-up"></i>
+                      <span>Click or drag to upload</span>
+                      <small>JPG, PNG, GIF, WebP (max 10MB)</small>
+                    </div>
+                    <input type="file" id="coverUpload" accept="image/*" class="cover-file-input" />
+                  </div>
+                  <input type="hidden" id="article-cover" />
+                </div>
+              </div>
+              <div class="action-buttons">
+                <button type="button" class="btn-publish" id="saveArticleBtn"><i class="fa-solid fa-paper-plane"></i> Save Article</button>
+                <button type="button" class="btn-cancel" onclick="closeArticleEditor()"><i class="fa-solid fa-times"></i> Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Batch Management (Image) Page -->
+        <div id="page-images" class="page">
+          <div class="page-header-row">
+            <div class="page-title-section">
+              <h3><i class="fa-solid fa-images"></i> Batch Management</h3>
+              <p class="page-subtitle">Manage images used in articles</p>
+            </div>
+            <!-- Temporarily disabled: Import/Export functionality
+            <div class="page-actions">
+              <button class="btn-outline" id="exportTemplateBtn"><i class="fa-solid fa-file-export"></i> Export Template</button>
+              <button class="btn-primary" id="importArticlesBtn"><i class="fa-solid fa-file-import"></i> Import Articles</button>
+            </div>
+            -->
+          </div>
+          <div class="image-stats-grid">
+            <div class="image-stat-card">
+              <div class="image-stat-icon"><i class="fa-solid fa-images"></i></div>
+              <div class="image-stat-value" id="img-total">0</div>
+              <div class="image-stat-label">Total Images</div>
+            </div>
+            <div class="image-stat-card">
+              <div class="image-stat-icon success"><i class="fa-solid fa-check-circle"></i></div>
+              <div class="image-stat-value" id="img-used">0</div>
+              <div class="image-stat-label">Used</div>
+            </div>
+            <div class="image-stat-card">
+              <div class="image-stat-icon warning"><i class="fa-solid fa-clock"></i></div>
+              <div class="image-stat-value" id="img-unused">0</div>
+              <div class="image-stat-label">Unused</div>
+            </div>
+            <div class="image-stat-card">
+              <div class="image-stat-icon info"><i class="fa-solid fa-database"></i></div>
+              <div class="image-stat-value" id="img-size">0 MB</div>
+              <div class="image-stat-label">Total Size</div>
+            </div>
+          </div>
+          <div class="upload-section">
+            <h4><i class="fa-solid fa-upload"></i> Upload Images</h4>
+            <div class="upload-dropzone" id="imageDropzone">
+              <div class="dropzone-content">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>Drag and drop files here or click to select</p>
+                <small>Supports JPG, PNG, GIF, WebP (max 10MB per file)</small>
+                <p class="dropzone-tip"><i class="fa-solid fa-lightbulb"></i> Tip: You can select multiple files at once</p>
+              </div>
+              <input type="file" id="imageFileInput" multiple accept="image/*" />
+              <button class="btn-select-file"><i class="fa-solid fa-folder-open"></i> Select Files</button>
+            </div>
+          </div>
+          <div class="toolbar" style="margin-bottom:16px;">
+            <div class="image-filter-tabs" style="flex:1;">
+              <button class="filter-tab active" data-filter="all">All <span id="tab-all-count">0</span></button>
+              <button class="filter-tab" data-filter="unused">Unused <span id="tab-unused-count">0</span></button>
+              <button class="filter-tab" data-filter="used">Used <span id="tab-used-count">0</span></button>
+            </div>
+            <div class="domain-config">
+              <label style="color:var(--muted);font-size:12px;margin-right:8px;">Frontend URL:</label>
+              <input type="text" id="frontendDomain" class="form-input" style="width:200px;" placeholder="http://localhost:3000" />
+              <button class="btn-secondary" onclick="saveFrontendDomain()" style="margin-left:8px;"><i class="fa-solid fa-save"></i></button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="imageTable">
+              <thead>
+                <tr>
+                  <th style="width:60px;">Preview</th>
+                  <th>File Name</th>
+                  <th>Size</th>
+                  <th>Dimensions</th>
+                  <th>Status</th>
+                  <th>Upload Time</th>
+                  <th style="width:160px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="imageTableBody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="image-pagination"></div>
+        </div>
+
+        <!-- Import Articles Modal -->
+        <div id="import-modal" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Import Articles from Excel</h3>
+              <button class="close-btn" onclick="closeImportModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+              <div class="import-dropzone" id="importDropzone">
+                <i class="fa-solid fa-file-excel"></i>
+                <p>Drop Excel file here or click to select</p>
+                <small>Supports .xlsx, .xls files</small>
+                <input type="file" id="importFileInput" accept=".xlsx,.xls" />
+              </div>
+              <div id="importProgress" class="import-progress hidden">
+                <div class="progress-bar"><div class="progress-fill"></div></div>
+                <p class="progress-text">Importing...</p>
+              </div>
+              <div id="importResult" class="import-result hidden"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Categories Page -->
+        <div id="page-categories" class="page">
+          <div class="toolbar">
+            <button id="new-category-btn" class="btn-primary"><i class="fa-solid fa-plus"></i> New Category</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Slug</th>
+                  <th>Articles</th>
+                  <th>Sort Order</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="categories-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Category Modal -->
+        <div id="category-modal" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="category-modal-title">New Category</h3>
+              <button class="close-btn" onclick="closeCategoryModal()">&times;</button>
+            </div>
+            <form id="category-form">
+              <div class="form-group">
+                <label>Name *</label>
+                <input type="text" id="category-name" required />
+              </div>
+              <div class="form-group">
+                <label>Description</label>
+                <textarea id="category-description" rows="2"></textarea>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Sort Order</label>
+                  <input type="number" id="category-order" value="0" />
+                </div>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="category-enabled" checked /> Enabled
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="closeCategoryModal()">Cancel</button>
+                <button type="submit" class="btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- System Settings Page -->
+        <div id="page-settings" class="page">
+          <div class="settings-page-grid">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <i class="fa-solid fa-shield"></i>
+                <h3>IP Access Control</h3>
+              </div>
+              <div class="settings-section-body">
+                <div class="settings-item">
+                  <div class="settings-item-info">
+                    <h4>Current IP Address</h4>
+                    <p>Your current IP address: <code id="current-ip">Loading...</code></p>
+                    <small>This IP will be used for blacklist/whitelist management</small>
+                  </div>
+                  <button class="btn-secondary" id="refreshIpBtn">
+                    <i class="fa-solid fa-refresh"></i> Refresh IP
+                  </button>
+                </div>
+                <div class="settings-item">
+                  <div class="settings-item-info">
+                    <h4>Add Current IP to Whitelist</h4>
+                    <p>Quickly add your current IP to the whitelist to ensure access</p>
+                  </div>
+                  <button class="btn-primary" id="addCurrentIpBtn">
+                    <i class="fa-solid fa-plus"></i> Add to Whitelist
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <i class="fa-solid fa-database"></i>
+                <h3>Data Management</h3>
+              </div>
+              <div class="settings-section-body">
+                <div class="settings-item">
+                  <div class="settings-item-info">
+                    <h4>Clear All Visitor Records</h4>
+                    <p>Delete all visitor logs and statistics data. This action cannot be undone.</p>
+                  </div>
+                  <button class="btn-danger" id="clearVisitorsBtn">
+                    <i class="fa-solid fa-trash"></i> Clear All Visitors
+                  </button>
+                </div>
+                <div class="settings-item">
+                  <div class="settings-item-info">
+                    <h4>Clear Daily Statistics</h4>
+                    <p>Reset all daily statistics data. Visitor logs will be preserved.</p>
+                  </div>
+                  <button class="btn-danger" id="clearStatsBtn">
+                    <i class="fa-solid fa-chart-bar"></i> Clear Statistics
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <i class="fa-solid fa-info-circle"></i>
+                <h3>System Information</h3>
+              </div>
+              <div class="settings-section-body">
+                <div class="system-info-grid">
+                  <div class="system-info-item">
+                    <span class="info-label">Total Visitors</span>
+                    <span class="info-value" id="sys-total-visitors">0</span>
+                  </div>
+                  <div class="system-info-item">
+                    <span class="info-label">Total Articles</span>
+                    <span class="info-value" id="sys-total-articles">0</span>
+                  </div>
+                  <div class="system-info-item">
+                    <span class="info-label">Total Images</span>
+                    <span class="info-value" id="sys-total-images">0</span>
+                  </div>
+                  <div class="system-info-item">
+                    <span class="info-label">Blacklisted IPs</span>
+                    <span class="info-value" id="sys-blacklist-count">0</span>
+                  </div>
+                  <div class="system-info-item">
+                    <span class="info-label">Whitelisted IPs</span>
+                    <span class="info-value" id="sys-whitelist-count">0</span>
+                  </div>
+                  <div class="system-info-item">
+                    <span class="info-label">Database Size</span>
+                    <span class="info-value" id="sys-db-size">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blacklist Page -->
+        <div id="page-blacklist" class="page">
+          <div class="page-info-banner">
+            <i class="fa-solid fa-info-circle"></i>
+            <div>
+              <strong>IP Blacklist:</strong> Blacklisted IPs will be denied access to all admin functions including login.
+              Expired entries are automatically ignored.
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="add-blacklist-btn" class="btn-primary"><i class="fa-solid fa-plus"></i> Add IP</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>IP Address</th>
+                  <th>Reason</th>
+                  <th>Created</th>
+                  <th>Expires</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="blacklist-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Blacklist Modal -->
+        <div id="blacklist-modal" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Add to Blacklist</h3>
+              <button class="close-btn" onclick="closeBlacklistModal()">&times;</button>
+            </div>
+            <form id="blacklist-form">
+              <div class="form-group">
+                <label>IP Address *</label>
+                <input type="text" id="blacklist-ip" required placeholder="e.g., 192.168.1.1" />
+              </div>
+              <div class="form-group">
+                <label>Reason</label>
+                <input type="text" id="blacklist-reason" />
+              </div>
+              <div class="form-group">
+                <label>Expires At (optional)</label>
+                <input type="datetime-local" id="blacklist-expires" />
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="closeBlacklistModal()">Cancel</button>
+                <button type="submit" class="btn-primary">Add</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Whitelist Page -->
+        <div id="page-whitelist" class="page">
+          <div class="page-info-banner">
+            <i class="fa-solid fa-info-circle"></i>
+            <div>
+              <strong>IP Whitelist:</strong> When whitelist entries exist, only whitelisted IPs can access admin functions.
+              If whitelist is empty, all IPs are allowed (except blacklisted ones).
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="add-whitelist-btn" class="btn-primary"><i class="fa-solid fa-plus"></i> Add IP</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>IP Address</th>
+                  <th>Description</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="whitelist-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Whitelist Modal -->
+        <div id="whitelist-modal" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Add to Whitelist</h3>
+              <button class="close-btn" onclick="closeWhitelistModal()">&times;</button>
+            </div>
+            <form id="whitelist-form">
+              <div class="form-group">
+                <label>IP Address *</label>
+                <input type="text" id="whitelist-ip" required placeholder="e.g., 192.168.1.1" />
+              </div>
+              <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="whitelist-description" />
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="closeWhitelistModal()">Cancel</button>
+                <button type="submit" class="btn-primary">Add</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Change Password Page -->
+        <div id="page-password" class="page">
+          <div class="card" style="max-width: 400px;">
+            <h4>Change Password</h4>
+            <form id="password-form">
+              <div class="form-group">
+                <label>Current Password</label>
+                <input type="password" id="old-password" required />
+              </div>
+              <div class="form-group">
+                <label>New Password</label>
+                <input type="password" id="new-password" required minlength="6" />
+              </div>
+              <div class="form-group">
+                <label>Confirm New Password</label>
+                <input type="password" id="confirm-password" required />
+              </div>
+              <button type="submit" class="btn-primary">Update Password</button>
+              <div id="password-msg" class="msg hidden"></div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

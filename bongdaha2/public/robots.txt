@@ -1,0 +1,16 @@
+# Robots.txt for Bongdaha
+User-agent: *
+Allow: /
+Allow: /article/
+Allow: /football-news
+Allow: /match-analysis
+
+# Disallow admin and API
+Disallow: /admin-HHrg9404nflfja22f/
+Disallow: /api/
+
+# Sitemap
+Sitemap: http://localhost:8080/sitemap.xml
+
+# Crawl delay (optional)
+Crawl-delay: 1

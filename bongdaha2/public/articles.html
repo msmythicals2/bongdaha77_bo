@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>News - Bongdaha</title>
+  <meta name="description" content="Latest football news, match analysis and updates from around the world." />
+  <meta name="robots" content="index, follow" />
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="Football News - Bongdaha" />
+  <meta property="og:description" content="Latest football news and match analysis." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Bongdaha" />
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Football News - Bongdaha" />
+  
+  <script src="/config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .article-card {
+      background: var(--card-bg, #1a1f25);
+      border: 1px solid #2d3439;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .article-card:hover {
+      border-color: #00e676;
+      transform: translateY(-4px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    .article-card img {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+    }
+    .article-card-body {
+      padding: 20px;
+    }
+    .article-card .category-tag {
+      display: inline-block;
+      padding: 4px 10px;
+      background: rgba(0,230,118,0.15);
+      color: #00e676;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .article-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .article-card p {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.6;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .article-meta {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #2d3439;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .articles-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 1200px) {
+      .articles-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 900px) {
+      .articles-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 600px) {
+      .articles-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .category-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 30px;
+    }
+    .category-tab {
+      padding: 10px 20px;
+      background: #1a1f25;
+      border: 1px solid #2d3439;
+      border-radius: 8px;
+      color: #94a3b8;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .category-tab:hover {
+      border-color: #00e676;
+      color: #fff;
+    }
+    .category-tab.active {
+      background: #00e676;
+      border-color: #00e676;
+      color: #000;
+    }
+    .page-hero {
+      background: linear-gradient(135deg, #1a1f25 0%, #0f1318 100%);
+      padding: 60px 0 40px;
+      margin-bottom: 40px;
+    }
+    .page-hero h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .page-hero p {
+      color: #64748b;
+      font-size: 16px;
+    }
+    .load-more {
+      display: block;
+      margin: 40px auto 0;
+      padding: 14px 40px;
+      background: transparent;
+      border: 2px solid #00e676;
+      color: #00e676;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .load-more:hover {
+      background: #00e676;
+      color: #000;
+    }
+    .no-articles {
+      text-align: center;
+      padding: 60px 20px;
+      color: #64748b;
+    }
+    .no-articles i {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+    @media (max-width: 768px) {
+      .page-hero { padding: 40px 20px 30px; }
+      .page-hero h1 { font-size: 1.75rem; }
+      .articles-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div id="header-placeholder"></div>
+
+<div class="page-hero">
+  <div class="max-w-[1200px] mx-auto px-6">
+    <h1 id="page-title">Latest News</h1>
+    <p id="page-subtitle">Stay updated with the latest football news and analysis</p>
+  </div>
+</div>
+
+<main class="max-w-[1200px] mx-auto px-6 pb-20">
+  <div id="category-tabs" class="category-tabs"></div>
+  
+  <div id="articles-container" class="articles-grid">
+    <div class="no-articles" style="grid-column:1/-1;">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <p>Loading articles...</p>
+    </div>
+  </div>
+  
+  <button id="load-more" class="load-more hidden">Load More</button>
+</main>
+
+<div id="footer-placeholder"></div>
+
+<script>
+// Load header and footer components
+async function loadComponents() {
+  try {
+    const cacheBust = `v=${Date.now()}`;
+    const [headerRes, footerRes] = await Promise.all([
+      fetch(`/components/header.html?${cacheBust}`),
+      fetch(`/components/footer.html?${cacheBust}`)
+    ]);
+    
+    const headerHTML = await headerRes.text();
+    const footerHTML = await footerRes.text();
+    
+    document.getElementById('header-placeholder').innerHTML = headerHTML;
+    document.getElementById('footer-placeholder').innerHTML = footerHTML;
+    
+    // Apply active state immediately after header loads
+    applyNavActiveState();
+    
+    // Start clock after header is loaded
+    updateClock();
+    setInterval(updateClock, 1000);
+    
+    // Load categories after components are loaded
+    await loadCategories();
+  } catch (err) {
+    console.error('Failed to load components:', err);
+  }
+}
+let currentPage = 1;
+let currentCategory = '';
+let totalArticles = 0;
+
+function normalizePathname(pathname) {
+  const p = String(pathname || '/');
+  if (p !== '/' && p.endsWith('/')) return p.slice(0, -1);
+  return p;
+}
+
+// Get category from URL (direct slug without /news prefix)
+const pathParts = normalizePathname(window.location.pathname).split('/').filter(p => p);
+if (pathParts.length > 0 && pathParts[0] !== 'article') {
+  currentCategory = pathParts[0];
+}
+
+// Apply active styling immediately on page load (before API returns)
+function applyNavActiveState() {
+  const nav = document.getElementById('main-nav');
+  if (!nav) return;
+  
+  const currentPath = normalizePathname(window.location.pathname);
+  const links = nav.querySelectorAll('a[href]');
+  
+  links.forEach(a => {
+    const href = a.getAttribute('href');
+    const linkPath = normalizePathname(href);
+    const isActive = linkPath === currentPath;
+
+    if (isActive) {
+      a.style.color = 'var(--green)';
+      a.classList.remove('text-gray-500');
+      a.classList.remove('hover:text-white');
+    } else {
+      a.style.color = '';
+      a.classList.add('text-gray-500');
+      a.classList.add('hover:text-white');
+    }
+    a.classList.add('transition-colors');
+  });
+  
+  // Mark nav as managed by articles page to prevent other scripts from overwriting
+  nav.setAttribute('data-managed-by', 'articles-page');
+}
+
+async function loadCategories() {
+  try {
+    // Wait for config with timeout
+    if (window.CONFIG_READY) {
+      await Promise.race([window.CONFIG_READY, new Promise(r => setTimeout(r, 2000))]);
+    }
+    const API_BASE = (window.APP_CONFIG?.adminApiUrl || 'http://localhost:8080') + '/api';
+    const res = await fetch(`${API_BASE}/public/categories`);
+    const data = await res.json();
+    if (data.success) {
+      const tabs = document.getElementById('category-tabs');
+      tabs.innerHTML =
+        data.data.map(c => `<a href="/${c.slug}" class="category-tab ${currentCategory === c.slug ? 'active' : ''}">${c.name} <span style="opacity:0.6">(${c.article_count})</span></a>`).join('');
+      
+      // Update nav
+      const nav = document.getElementById('main-nav');
+      if (nav) {
+        const currentPath = normalizePathname(window.location.pathname);
+        
+        nav.innerHTML = `<a href="/" class="text-gray-500 hover:text-white transition-colors">Football</a>` +
+          data.data.map(c => {
+            const href = `/${c.slug}`;
+            return `<a href="${href}" class="text-gray-500 hover:text-white transition-colors">${c.name}</a>`;
+          }).join('');
+        
+        // Re-apply active state after nav is rebuilt
+        applyNavActiveState();
+      }
+      
+      // Update footer category links (insert after News Feed)
+      const footerCatLinks = document.getElementById('footer-category-links');
+      if (footerCatLinks) {
+        footerCatLinks.innerHTML = data.data.slice(0, 4).map(c => 
+          `<a href="/${c.slug}" class="footer-link">${c.name}</a>`
+        ).join('');
+      }
+      
+      // Update title if category
+      if (currentCategory) {
+        const cat = data.data.find(c => c.slug === currentCategory);
+        if (cat) {
+          document.getElementById('page-title').textContent = cat.name;
+          document.getElementById('page-subtitle').textContent = `Browse all ${cat.name.toLowerCase()} articles`;
+          document.title = `${cat.name} - Bongdaha`;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Load categories error:', err);
+  }
+}
+
+async function loadArticles(append = false) {
+  try {
+    // Wait for config with timeout
+    if (window.CONFIG_READY) {
+      await Promise.race([window.CONFIG_READY, new Promise(r => setTimeout(r, 2000))]);
+    }
+    const API_BASE = (window.APP_CONFIG?.adminApiUrl || 'http://localhost:8080') + '/api';
+    let url = `${API_BASE}/public/articles?page=${currentPage}&page_size=12`;
+    if (currentCategory) url += `&category=${currentCategory}`;
+    
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    if (data.success) {
+      totalArticles = data.total;
+      const container = document.getElementById('articles-container');
+      
+      const html = data.data.map(a => `
+        <a href="/${a.slug}" class="article-card">
+          ${a.cover_image ? `<img src="${a.cover_image}" alt="${a.title}" onerror="this.style.display='none'" />` : ''}
+          <div class="article-card-body">
+            ${a.category_name ? `<span class="category-tag">${a.category_name}</span>` : ''}
+            <h3>${a.title}</h3>
+            <p>${a.summary || ''}</p>
+            <div class="article-meta">
+              <span><i class="fa-regular fa-calendar"></i> ${new Date(a.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</span>
+              <span><i class="fa-regular fa-eye"></i> ${a.view_count} views</span>
+            </div>
+          </div>
+        </a>
+      `).join('');
+      
+      if (append) {
+        container.innerHTML += html;
+      } else {
+        container.innerHTML = html || '<div class="no-articles" style="grid-column:1/-1;"><i class="fa-solid fa-newspaper"></i><p>No articles found</p></div>';
+      }
+      
+      // Show/hide load more
+      const loadMoreBtn = document.getElementById('load-more');
+      if (currentPage * 12 < totalArticles) {
+        loadMoreBtn.classList.remove('hidden');
+      } else {
+        loadMoreBtn.classList.add('hidden');
+      }
+    }
+  } catch (err) {
+    console.error('Load articles error:', err);
+    document.getElementById('articles-container').innerHTML = '<div class="no-articles" style="grid-column:1/-1;"><i class="fa-solid fa-exclamation-triangle"></i><p>Failed to load articles</p></div>';
+  }
+}
+
+document.getElementById('load-more').addEventListener('click', () => {
+  currentPage++;
+  loadArticles(true);
+});
+
+// Clock - same format as homepage
+function pad2(n) { return String(n).padStart(2, "0"); }
+function updateClock() {
+  const n = new Date();
+  const el = document.getElementById("clock");
+  if (el) el.textContent = `${pad2(n.getDate())}/${pad2(n.getMonth()+1)}/${n.getFullYear()} ${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`;
+}
+
+// Init - wrap in async function to properly await CONFIG_READY
+(async function init() {
+  await loadComponents(); // This now loads categories too
+  await loadArticles();
+})();
+</script>
+<script src="/tracker.js"></script>
+</body>
+</html>

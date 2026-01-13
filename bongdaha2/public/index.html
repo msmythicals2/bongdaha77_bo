@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bongdaha - Real-Time Football Livescore</title>
+  <meta name="description" content="Live football scores, fixtures, results and news. Follow your favorite teams and leagues with real-time updates." />
+  <meta name="keywords" content="football, livescore, soccer, fixtures, results, news" />
+  <meta name="author" content="Bongdaha" />
+  <meta name="robots" content="index, follow" />
+  <meta name='dmca-site-verification' content='RzE1MGhaWFdscExVdnhwZ0RYZVZlUT090' />
+  <link rel="canonical" href="http://localhost:3000/" />
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="Bongdaha - Real-Time Football Livescore" />
+  <meta property="og:description" content="Live football scores, fixtures, results and news." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="http://localhost:3000/" />
+  <meta property="og:image" content="http://localhost:3000/logo.svg" />
+  <meta property="og:site_name" content="Bongdaha" />
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Bongdaha - Real-Time Football Livescore" />
+  <meta name="twitter:description" content="Live football scores, fixtures, results and news." />
+  <meta name="twitter:image" content="http://localhost:3000/logo.svg" />
+
+  <script src="/config.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        const domain = window.APP_CONFIG?.frontendDomain || 'https://localhost:3000';
+        document.querySelector('link[rel="canonical"]')?.setAttribute('href', domain + '/');
+        document.querySelector('meta[property="og:url"]')?.setAttribute('content', domain + '/');
+        document.querySelector('meta[property="og:image"]')?.setAttribute('content', domain + '/logo.svg');
+        document.querySelector('meta[name="twitter:image"]')?.setAttribute('content', domain + '/logo.svg');
+      }, 100);
+    });
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+
+<body id="top">
+
+<!-- ================= HEADER ================= -->
+<div id="header-placeholder"></div>
+
+<!-- ================= APP CONTAINER ================= -->
+<div class="app-container">
+
+  <!-- ========== LEFT SIDEBAR ========== -->
+  <aside>
+
+    <div class="sidebar-section mb-4">
+      <div
+        class="flex items-center justify-between p-3 border-b border-[#2d3439] cursor-pointer group"
+        id="toggle-competitions"
+      >
+        <h3 class="section-title !mb-0">World Competitions</h3>
+        <i
+          class="fa-solid fa-chevron-right text-xs text-gray-500 group-hover:text-[#00e676]"
+          id="comp-chevron"
+        ></i>
+      </div>
+
+      <ul id="top-competitions" class="p-2 space-y-1"></ul>
+      <ul
+        id="all-competitions"
+        class="hidden p-2 space-y-1 border-t border-[#2d3439]"
+      ></ul>
+    </div>
+
+    <div class="sidebar-section p-4">
+      <h3 class="section-title">My Pinned Leagues</h3>
+      <ul id="pinned-leagues" class="space-y-1"></ul>
+    </div>
+
+    <div class="sidebar-section p-4">
+      <h3 class="section-title">Top Countries</h3>
+      <div
+        id="countries-list"
+        class="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar"
+      ></div>
+    </div>
+
+  </aside>
+
+  <!-- ========== MAIN CENTER ========== -->
+  <main>
+
+    <!-- ===== HOME / FIXTURES ===== -->
+    <div class="main-card">
+
+      <div class="tabs-nav">
+        <button class="tab-btn active" data-tab="all">ALL</button>
+        <button class="tab-btn tab-live" data-tab="live">
+          LIVE <span class="live-indicator"></span>
+        </button>
+        <button class="tab-btn" data-tab="finished">FINISHED</button>
+        <button class="tab-btn" data-tab="scheduled">SCHEDULED</button>
+
+        <button class="tab-btn tab-fav ml-auto" data-tab="favorite">
+          <i class="fa-solid fa-star text-yellow-500 mr-2"></i>
+          MY FAVORITES
+        </button>
+      </div>
+
+      <div class="date-row">
+        <button id="btnPrevDay" class="date-btn">
+          <i class="fa-solid fa-chevron-left text-xs"></i>
+        </button>
+
+        <div id="date-strip" class="date-strip"></div>
+
+        <button id="btnNextDay" class="date-btn">
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+
+        <input id="datePicker" type="date" class="date-input" />
+      </div>
+
+      <div id="fixtures-container">
+        <div class="loading-placeholder">Initialising Match Data...</div>
+      </div>
+
+    </div>
+
+    <!-- ===== LEAGUE PAGE (🔥 关键：独立出来) ===== -->
+    <div id="league-page" class="league-page hidden">
+
+      <section class="league-page-header">
+        <div class="league-header-left">
+          <i class="fa fa-chevron-left" id="back-to-home"
+             style="cursor:pointer; margin-right:15px;"></i>
+
+          <img class="league-logo-lg" src="" alt="League Logo" />
+
+          <div class="league-info">
+            <div class="league-name">League Name</div>
+            <div class="league-meta">
+              <span class="league-country">Country</span>
+              <span class="league-season">2025 / 2026</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <nav class="league-tabs" id="league-tabs">
+        <button class="league-tab active" data-tab="summary">SUMMARY</button>
+        <button class="league-tab" data-tab="results">RESULTS</button>
+        <button class="league-tab" data-tab="standings">STANDINGS</button>
+        <button class="league-tab" data-tab="h2h">H2H</button>
+      </nav>
+
+      <section class="league-content">
+
+        <div class="league-panel active" id="league-summary">
+          <div class="league-summary-block">
+            <div class="summary-title">Today's Matches</div>
+            <div id="summary-content">
+              <div class="p-10 text-center text-gray-500">Loading matches...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="league-panel" id="league-results">
+          <div class="p-10 text-center text-gray-500">Loading results...</div>
+        </div>
+
+        <div class="league-panel" id="league-standings">
+          <div class="p-10 text-center text-gray-500">Loading standings...</div>
+        </div>
+
+        <div class="league-panel" id="league-h2h">
+          <div class="p-20 text-center text-gray-500">
+            Head-to-head data coming soon
+          </div>
+        </div>
+
+      </section>
+    </div>
+
+  </main>
+
+  <!-- ========== RIGHT SIDEBAR ========== -->
+  <aside>
+
+    <div class="sidebar-section mb-4">
+      <div class="featured-header">
+        <span>Live Matches</span>
+        <div>
+          <span id="carousel-prev" class="featured-nav">‹</span>
+          <span id="carousel-next" class="featured-nav">›</span>
+        </div>
+      </div>
+
+      <div id="live-carousel-content" class="featured-body">
+        <div class="loading-placeholder">Loading live matches...</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="news-header">
+        <span class="text-[10px] tracking-widest uppercase">Football News</span>
+        <a href="#" class="news-link">More</a>
+      </div>
+      <div id="news-container"></div>
+    </div>
+
+  </aside>
+
+</div>
+
+<!-- ================= FOOTER ================= -->
+<div id="footer-placeholder"></div>
+
+<script src="/main.js"></script>
+<script src="/tracker.js"></script>
+</body>
+</html>
