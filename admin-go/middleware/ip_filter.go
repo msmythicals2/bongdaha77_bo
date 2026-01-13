@@ -73,6 +73,11 @@ func getClientIP(c *gin.Context) string {
 
 // isBlacklisted checks if an IP is in the blacklist and not expired
 func isBlacklisted(ip string) bool {
+	// Demo mode: no blacklist when database is not available
+	if models.DB == nil {
+		return false
+	}
+
 	var count int
 	now := time.Now()
 
@@ -91,6 +96,11 @@ func isBlacklisted(ip string) bool {
 
 // hasWhitelist checks if there are any entries in the whitelist
 func hasWhitelist() bool {
+	// Demo mode: no whitelist when database is not available
+	if models.DB == nil {
+		return false
+	}
+
 	var count int
 	err := models.DB.QueryRow("SELECT COUNT(*) FROM ip_whitelist").Scan(&count)
 	if err != nil {
@@ -101,6 +111,11 @@ func hasWhitelist() bool {
 
 // isWhitelisted checks if an IP is in the whitelist
 func isWhitelisted(ip string) bool {
+	// Demo mode: always allow when database is not available
+	if models.DB == nil {
+		return true
+	}
+
 	var count int
 	err := models.DB.QueryRow("SELECT COUNT(*) FROM ip_whitelist WHERE ip_address = ?", ip).Scan(&count)
 	if err != nil {

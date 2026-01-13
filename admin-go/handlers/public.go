@@ -11,6 +11,11 @@ import (
 
 // GetPublicCategories returns categories with article counts (only those with articles)
 func GetPublicCategories(c *gin.Context) {
+	if models.DB == nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": []map[string]interface{}{}})
+		return
+	}
+
 	rows, err := models.DB.Query(`
 		SELECT c.id, c.name, c.slug, COUNT(a.id) as article_count
 		FROM categories c
@@ -45,6 +50,17 @@ func GetPublicCategories(c *gin.Context) {
 
 // GetPublicArticles returns published articles with pagination
 func GetPublicArticles(c *gin.Context) {
+	if models.DB == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"data":      []map[string]interface{}{},
+			"total":     0,
+			"page":      1,
+			"page_size": 10,
+		})
+		return
+	}
+
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	categorySlug := c.Query("category")
@@ -122,6 +138,11 @@ func GetPublicArticles(c *gin.Context) {
 
 // GetPublicArticleBySlug returns a single article by slug with related articles
 func GetPublicArticleBySlug(c *gin.Context) {
+	if models.DB == nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Article not found"})
+		return
+	}
+
 	slug := c.Param("slug")
 
 	var id int64

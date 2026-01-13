@@ -170,7 +170,24 @@ app.get("/api/fixtures", async (req, res) => {
 app.get("/api/live", async (req, res) => {
   try {
     const r = await axios.get(`${BASE_URL}/fixtures`, { headers, params: { live: "all" } });
-    res.json(r.data?.response || []);
+    const matches = r.data?.response || [];
+    
+    // 只返回真实的Live数据，过滤掉测试数据
+    const realLiveMatches = matches.filter(match => {
+      const matchDate = new Date(match.fixture.date);
+      const now = new Date();
+      const timeDiff = Math.abs(now - matchDate);
+      const hoursDiff = timeDiff / (1000 * 60 * 60);
+      
+      // 只保留当前时间前后3小时内的比赛（真实的Live比赛应该在这个范围内）
+      // 并且必须有有效的elapsed时间或者是真实的Live状态
+      return hoursDiff <= 3 && 
+             (match.fixture.status.elapsed !== null || 
+              ['1H', '2H', 'HT', 'ET', 'BT', 'P'].includes(match.fixture.status.short));
+    });
+    
+    console.log(`Live API: ${matches.length} total matches, ${realLiveMatches.length} real live matches`);
+    res.json(realLiveMatches);
   } catch (err) {
     console.error("live error:", err.message);
     res.json([]);

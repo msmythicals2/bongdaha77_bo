@@ -55,7 +55,7 @@ body {
 }
 
 .login-logo {
-  height: 50px;
+  height: 80px;
   margin-bottom: 15px;
 }
 
@@ -203,7 +203,7 @@ body {
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: 30px 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -211,12 +211,12 @@ body {
 }
 
 .sidebar.collapsed .sidebar-header {
-  padding: 20px 15px;
+  padding: 30px 15px;
   justify-content: center;
 }
 
 .sidebar-logo {
-  height: 40px;
+  height: 80px;
   transition: opacity 0.3s;
 }
 

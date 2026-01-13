@@ -25,17 +25,22 @@ func InitDB() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
 		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBCharset)
 
-	log.Printf("Connecting to MySQL database: %s@%s:%s/%s", cfg.DBUser, cfg.DBHost, cfg.DBPort, cfg.DBName)
+	log.Printf("Attempting to connect to MySQL database: %s@%s:%s/%s", cfg.DBUser, cfg.DBHost, cfg.DBPort, cfg.DBName)
 
 	var err error
 	DB, err = sql.Open("mysql", dsn)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Printf("Warning: Failed to connect to database: %v", err)
+		log.Println("Running in demo mode without database connection")
+		return
 	}
 
 	// Test the connection
 	if err = DB.Ping(); err != nil {
-		log.Fatal("Failed to ping database:", err)
+		log.Printf("Warning: Failed to ping database: %v", err)
+		log.Println("Running in demo mode without database connection")
+		DB = nil
+		return
 	}
 
 	log.Println("Connected to MySQL database successfully")

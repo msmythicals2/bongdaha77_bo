@@ -24,6 +24,41 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// Demo mode: hardcoded admin account when database is not available
+	if models.DB == nil {
+		if req.Username == "admin" && req.Password == "admin123" {
+			// Generate JWT token for demo mode
+			claims := Claims{
+				Username: "admin",
+				UserID:   1,
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			}
+
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			tokenString, err := token.SignedString([]byte(config.GetJWTSecret()))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"token":   tokenString,
+				"user": gin.H{
+					"id":       1,
+					"username": "admin",
+				},
+			})
+			return
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+			return
+		}
+	}
+
 	var admin models.Admin
 	err := models.DB.QueryRow("SELECT id, username, password FROM admins WHERE username = ?", req.Username).
 		Scan(&admin.ID, &admin.Username, &admin.Password)

@@ -150,6 +150,7 @@
 
       <nav class="league-tabs" id="league-tabs">
         <button class="league-tab active" data-tab="summary">SUMMARY</button>
+        <button class="league-tab" data-tab="fixtures">FIXTURES</button>
         <button class="league-tab" data-tab="results">RESULTS</button>
         <button class="league-tab" data-tab="standings">STANDINGS</button>
         <button class="league-tab" data-tab="h2h">H2H</button>
@@ -158,20 +159,19 @@
       <section class="league-content">
 
         <div class="league-panel active" id="league-summary">
-          <div class="league-summary-block">
-            <div class="summary-title">Today's Matches</div>
-            <div id="summary-content">
-              <div class="p-10 text-center text-gray-500">Loading matches...</div>
-            </div>
-          </div>
+          <div class="loading-placeholder">Loading summary...</div>
+        </div>
+
+        <div class="league-panel" id="league-fixtures">
+          <div class="loading-placeholder">Loading fixtures...</div>
         </div>
 
         <div class="league-panel" id="league-results">
-          <div class="p-10 text-center text-gray-500">Loading results...</div>
+          <div class="loading-placeholder">Loading results...</div>
         </div>
 
         <div class="league-panel" id="league-standings">
-          <div class="p-10 text-center text-gray-500">Loading standings...</div>
+          <div class="loading-placeholder">Loading standings...</div>
         </div>
 
         <div class="league-panel" id="league-h2h">

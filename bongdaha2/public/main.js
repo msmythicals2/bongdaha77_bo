@@ -1,5 +1,5 @@
 // ==========================================
-// BONGDAHA - main.js (FINAL INTEGRATED VERSION)
+// BONGDAHA - main.js (CLEAN VERSION)
 // ==========================================
 
 // Load header and footer components
@@ -34,24 +34,53 @@ const state = {
   tab: "all",
   date: new Date(),
   favorites: new Set(JSON.parse(localStorage.getItem("favMatches") || "[]")),
-  collapsedLeagues: new Set(), // 新增：用于存储被折叠的联赛 ID
+  collapsedLeagues: new Set(),
   carouselIndex: 0,
   lastFixtures: [],
   lastLive: [],
   selectedLeagueId: null,
 };
-let __REFRESHING__ = false;
-const __CACHE__ = new Map(); // key -> { t, data }
-const CACHE_TTL = 60 * 1000; // 60秒
 
-// 1. 定义 COMPETITIONS 固定联赛数据
+let __REFRESHING__ = false;
+const __CACHE__ = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
+
+// Enhanced caching system
+async function apiGetJSONCached(url, ttl = CACHE_TTL) {
+  const now = Date.now();
+  const hit = __CACHE__.get(url);
+  
+  if (hit && now - hit.t < ttl) {
+    return hit.data;
+  }
+
+  try {
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.error("API failed:", url, r.status);
+      return null;
+    }
+    
+    const data = await r.json();
+    __CACHE__.set(url, { t: now, data });
+    return data;
+  } catch (err) {
+    console.error("Fetch error:", url, err);
+    return null;
+  }
+}
+
+async function apiGetJSON(url) {
+  return apiGetJSONCached(url, CACHE_TTL);
+}
+// Competition data
 const COMPETITION_DATA = [
   { id: 39, name: "Premier League", country: "England", logo: "https://media.api-sports.io/football/leagues/39.png" },
   { id: 140, name: "La Liga", country: "Spain", logo: "https://media.api-sports.io/football/leagues/140.png" },
   { id: 135, name: "Serie A", country: "Italy", logo: "https://media.api-sports.io/football/leagues/135.png" },
   { id: 78, name: "Bundesliga", country: "Germany", logo: "https://media.api-sports.io/football/leagues/78.png" },
   { id: 61, name: "Ligue 1", country: "France", logo: "https://media.api-sports.io/football/leagues/61.png" },
-  { id: 271, name: "V.League 1", country: "Vietnam", logo: "https://media.api-sports.io/football/leagues/271.png" },
+  { id: 340, name: "V.League 1", country: "Vietnam", logo: "https://media.api-sports.io/football/leagues/340.png" },
   { id: 88, name: "Eredivisie", country: "Netherlands", logo: "https://media.api-sports.io/football/leagues/88.png" },
   { id: 203, name: "Süper Lig", country: "Turkiye", logo: "https://media.api-sports.io/football/leagues/203.png" },
   { id: 40, name: "Championship", country: "England", logo: "https://media.api-sports.io/football/leagues/40.png" },
@@ -64,9 +93,7 @@ const COMPETITION_DATA = [
   { id: 1, name: "World Cup 2026", country: "International", logo: "https://media.api-sports.io/football/leagues/1.png" }
 ];
 
-// ---------- Helpers ----------
-
-// === 基础格式化 ===
+// Helper functions
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
@@ -81,23 +108,18 @@ function formatHHMM(dateStr) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-// === 比赛状态判断 ===
 function isFinished(status) {
-  // 增加 ABD(中断), AWD(判决), CANC(取消)
   return ["FT", "AET", "PEN", "ABD", "AWD", "CANC"].includes(status);
 }
 
 function isLiveStatus(status) {
-  // 保持不变，这是标准的滚球状态
   return ["1H", "2H", "HT", "ET", "BT", "P", "LIVE"].includes(status);
 }
 
 function isScheduled(status) {
-  // 增加 PST(推迟)，确保未赛的都能显示
   return ["NS", "TBD", "PST"].includes(status);
 }
 
-// === 安全输出 ===
 function escapeHtml(str) {
   return String(str ?? "")
     .replaceAll("&", "&amp;")
@@ -111,174 +133,40 @@ function extractMatch(result) {
   return result?.response?.[0] || null;
 }
 
-// ================================
-// League Page - Show / Hide Logic
-// ================================
-
-// 进入详情页
-function showLeaguePage() {
-    const mainList = document.getElementById("fixtures-container");
-    const leaguePage = document.getElementById("league-page");
-    const dateRow = document.querySelector(".date-row");
-    const tabsNav = document.querySelector(".tabs-nav");
-
-    if (mainList) mainList.classList.add("hidden");
-    if (dateRow) dateRow.classList.add("hidden");
-    if (tabsNav) tabsNav.classList.add("hidden");
-    
-    if (leaguePage) {
-        leaguePage.classList.remove("hidden");
-        window.scrollTo(0, 0); // 切换时回到顶部
-    }
-}
-
-function hideLeaguePage() {
-    const mainList = document.getElementById("fixtures-container");
-    const leaguePage = document.getElementById("league-page");
-    const dateRow = document.querySelector(".date-row");
-    const tabsNav = document.querySelector(".tabs-nav");
-
-    if (leaguePage) leaguePage.classList.add("hidden");
-    
-    if (mainList) mainList.classList.remove("hidden");
-    if (dateRow) dateRow.classList.remove("hidden");
-    if (tabsNav) tabsNav.classList.remove("hidden");
-    
-    state.selectedLeagueId = null;
-}
-
-function loadLeaguePage(leagueId) {
-  console.log("Loading League ID:", leagueId, typeof leagueId);
-  if (!leagueId) return;
-
-  const targetId = Number(leagueId);
-  const league = COMPETITION_DATA.find(l => l.id === targetId);
-
-  if (!league) {
-    console.error("League not found in COMPETITION_DATA:", targetId);
-    hideLeaguePage(); 
-    return;
-  }
-
-  // --- 【关键修改】显示 League Page 容器，隐藏主列表 ---
-  const leaguePage = document.getElementById("league-page");
-
-  // 2️⃣ 填充 Header (匹配你的 HTML 结构)
-  const logoEl = document.querySelector("#league-page .league-logo-lg");
-  const nameEl = document.querySelector("#league-page .league-name");
-  const countryEl = document.querySelector("#league-page .league-country");
-  const seasonEl = document.querySelector("#league-page .league-season");
-
-  if (logoEl) logoEl.src = league.logo || "";
-  if (nameEl) nameEl.textContent = league.name || "";
-  if (countryEl) countryEl.textContent = league.country || "";
-  if (seasonEl) seasonEl.textContent = league.season || "2025 / 2026";
-
-  // 3️⃣ 默认切换 Tab 状态
-  document.querySelectorAll(".league-tab").forEach(t =>
-    t.classList.toggle("active", t.dataset.tab === "summary")
-  );
-  document.querySelectorAll(".league-panel").forEach(p =>
-    p.classList.toggle("active", p.id === "league-summary")
-  );
-
-  // 4️⃣ 绑定事件与渲染内容
-  setupLeagueTabs();
-  
-  // 确保这个函数存在，否则会报错导致黑屏
-  if (typeof renderLeagueSummary === "function") {
-      renderLeagueSummary(targetId);
-  }
-}
-
-function renderLeagueSummary(leagueId) {
-  const container = document.getElementById("summary-content");
-  if (!container) return;
-
-  const leagueMatches = Array.from(
-    new Map(
-      [...state.lastFixtures, ...state.lastLive]
-        .filter(f => f.league.id === leagueId)
-        .map(f => [f.fixture.id, f])
-    ).values()
-  );
-
-  leagueMatches.sort(
-    (a, b) => new Date(a.fixture.date) - new Date(b.fixture.date)
-  );
-
-  if (leagueMatches.length === 0) {
-    container.innerHTML = `
-      <div class="p-10 text-center text-gray-500">
-        No matches available for this league.
-      </div>`;
-    return;
-  }
-
-  const finished = leagueMatches.filter(m =>
-    isFinished(m.fixture.status.short)
-  );
-  const upcoming = leagueMatches.filter(m =>
-    isScheduled(m.fixture.status.short)
-  );
-
-  const renderBlock = (title, list) => `
-    <div class="mb-6">
-      <div class="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-3 border-l-2 border-[#00e676] pl-2">
-        ${title}
-      </div>
-      ${list.map(m => `
-        <div class="league-match-row mb-1">
-          <div class="match-left">
-            <span class="match-time text-gray-500">
-              ${formatHHMM(m.fixture.date)}
-            </span>
-            <span class="match-home font-medium">
-              ${escapeHtml(m.teams.home.name)}
-            </span>
-          </div>
-          <div class="match-center font-bold text-[#00e676]">
-            ${isFinished(m.fixture.status.short)
-              ? `${m.goals.home} : ${m.goals.away}`
-              : '-'}
-          </div>
-          <div class="match-right">
-            <span class="match-away font-medium">
-              ${escapeHtml(m.teams.away.name)}
-            </span>
-          </div>
-        </div>
-      `).join("")}
-    </div>
-  `;
-
-  container.innerHTML = `
-    ${finished.length ? renderBlock('Recent Results', finished) : ''}
-    ${upcoming.length ? renderBlock('Upcoming Matches', upcoming) : ''}
-    ${(!finished.length && !upcoming.length)
-      ? '<div class="p-10 text-center text-gray-500">No data available</div>'
-      : ''}
-  `;
-}
-
-
-// ---------- API ----------
-async function apiGetJSON(url) {
+// Load navigation categories
+async function loadNavCategories() {
   try {
-    const r = await fetch(url);
-
-    if (!r.ok) {
-      console.error("API failed:", url, r.status);
-      return null;
+    await window.CONFIG_READY;
+    const apiBase = window.APP_CONFIG?.adminApiUrl || 'http://localhost:8080';
+    const res = await fetch(`${apiBase}/api/public/categories`);
+    const data = await res.json();
+    
+    if (data.success && data.data.length > 0) {
+      const navContainer = document.querySelector('#main-nav');
+      if (navContainer && !navContainer.hasAttribute('data-managed-by')) {
+        // Only update nav if it's not being managed by another page (like articles.html)
+        const footballLink = navContainer.querySelector('a[href="/"]');
+        if (footballLink) {
+          // Clear existing content and rebuild
+          navContainer.innerHTML = `<a href="/" class="text-gray-500 hover:text-white transition-colors">Football</a>`;
+          
+          // Add category links
+          data.data.forEach(category => {
+            const link = document.createElement('a');
+            link.href = `/${category.slug}`;
+            link.className = 'text-gray-500 hover:text-white transition-colors';
+            link.textContent = category.name.toUpperCase();
+            navContainer.appendChild(link);
+          });
+        }
+      }
     }
-
-    return await r.json();
   } catch (err) {
-    console.error("Fetch error:", url, err);
-    return null;
+    console.error('Failed to load categories:', err);
   }
 }
 
+// API functions
 async function loadFixturesByDateCached(d) {
   const key = `fx:${toYMD(d)}`;
   const now = Date.now();
@@ -292,7 +180,7 @@ async function loadFixturesByDateCached(d) {
 }
 
 const loadLive = () => apiGetJSON(`/api/live`);
-// Load news from database API (latest 5 published articles)
+
 const loadNews = async () => {
   try {
     await window.CONFIG_READY;
@@ -307,15 +195,14 @@ const loadNews = async () => {
   }
 };
 
-// ---------- Clock ----------
+// Clock function
 function updateClock() {
   const n = new Date();
   const el = document.getElementById("clock");
   if (!el) return;
   el.textContent = `${pad2(n.getDate())}/${pad2(n.getMonth()+1)}/${n.getFullYear()} ${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`;
 }
-
-// ---------- Date strip ----------
+// Date strip rendering
 function renderDateStrip() {
   const strip = document.getElementById("date-strip");
   if (!strip) return;
@@ -339,6 +226,7 @@ function renderDateStrip() {
   if (dp) dp.value = baseYMD;
 }
 
+// Render competitions
 function renderCompetitions() {
   const topContainer = document.getElementById('top-competitions');
   const allContainer = document.getElementById('all-competitions');
@@ -356,6 +244,7 @@ function renderCompetitions() {
   allContainer.innerHTML = COMPETITION_DATA.slice(6).map(createItem).join('');
 }
 
+// Render left sidebar
 function renderLeftSidebar(fixtures) {
   const countryList = document.getElementById("countries-list");
   const pinnedList = document.getElementById("pinned-leagues");
@@ -391,36 +280,24 @@ function renderLeftSidebar(fixtures) {
   }
 }
 
-// ---------- Fixtures ----------
+// Apply tab filter
 function applyTabFilter(all, live) {
-    // 1. 合并所有数据并去重（fixture.id 唯一）
-    // 这样确保 ALL 标签下既有已经结束的，也有正在滚球的
     const mergedMap = new Map();
     [...all, ...live].forEach(f => mergedMap.set(f.fixture.id, f));
     const dayMatches = Array.from(mergedMap.values());
 
-    // 2. 根据 Tab 逻辑过滤
     switch (state.tab) {
         case "live":
-            // 仅显示正在滚球的
             return live;
-
         case "finished":
-            // 仅显示已结束的 (判断 FT, AET, PEN)
             return dayMatches.filter(f => isFinished(f.fixture.status.short));
-
         case "scheduled":
-            // 仅显示未开赛的 (判断 NS, TBD)
             return dayMatches.filter(f => isScheduled(f.fixture.status.short));
-
         case "favorite":
             return dayMatches.filter(f => state.favorites.has(f.fixture.id))
                              .sort((a, b) => Number(isLiveStatus(b.fixture.status.short)) - Number(isLiveStatus(a.fixture.status.short)));
-
         case "all":
         default:
-            // 显示当天所有：已结束 + 滚球 + 未开赛
-            // 排序：滚球中的排最上面，其余按时间排
             return dayMatches.sort((a, b) => {
                 const aLive = isLiveStatus(a.fixture.status.short);
                 const bLive = isLiveStatus(b.fixture.status.short);
@@ -429,7 +306,7 @@ function applyTabFilter(all, live) {
             });
     }
 }
-
+// Render fixtures
 function renderFixtures(fixtures, live) {
     const el = document.getElementById("fixtures-container");
     if (!el) return;
@@ -444,106 +321,114 @@ function renderFixtures(fixtures, live) {
         return;
     }
 
-    // 按联赛分组
+    // Group by league
     const map = new Map();
     list.forEach(f => {
         if (!map.has(f.league.id)) map.set(f.league.id, { league: f.league, items: [] });
         map.get(f.league.id).items.push(f);
     });
 
-let html = "";
+    let html = "";
+    const leagueGroups = Array.from(map.entries());
 
-// ✅ 关键：Map → Array，才能拿到 index
-const leagueGroups = Array.from(map.entries());
+    leagueGroups.forEach(([leagueId, g], index) => {
+        const l = g.league;
 
-leagueGroups.forEach(([leagueId, g], index) => {
-    const l = g.league;
+        if (index >= 10 && !state.collapsedLeagues.has(leagueId)) {
+            state.collapsedLeagues.add(leagueId);
+        }
 
-    // ✅ 前 10 个联赛默认展开，其余默认折叠
-    if (index >= 10 && !state.collapsedLeagues.has(leagueId)) {
-        state.collapsedLeagues.add(leagueId);
-    }
+        const isCollapsed = state.collapsedLeagues.has(leagueId);
+        const matchCount = g.items.length;
 
-    const isCollapsed = state.collapsedLeagues.has(leagueId);
-    const matchCount = g.items.length;
+        html += `
+            <div class="league-group" data-league-id="${leagueId}">
+                <div class="league-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="league-info-left">
+                        ${l.flag ? `<img class="league-flag" src="${l.flag}">` : ""}
+                        ${l.logo ? `<img class="league-logo-md" src="${l.logo}">` : ""}
+                        <span class="league-name-text">
+                          ${escapeHtml(l.country)} - ${escapeHtml(l.name)}
+                        </span>
+                    </div>
 
-    html += `
-        <div class="league-group" data-league-id="${leagueId}">
-            <div class="league-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                <div class="league-info-left">
-                    ${l.flag ? `<img class="league-flag" src="${l.flag}">` : ""}
-                    ${l.logo ? `<img class="league-logo-md" src="${l.logo}">` : ""}
-                    <span class="league-name-text">
-                      ${escapeHtml(l.country)} - ${escapeHtml(l.name)}
-                    </span>
+                    <div class="league-header-right" style="display: flex; align-items: center; gap: 8px;">
+                        <span class="match-count-badge"
+                              style="display:${isCollapsed ? 'inline-block' : 'none'}; background:#374151; color:#00e676; font-size:11px; padding:2px 6px; border-radius:10px; font-weight:bold;">
+                            ${matchCount}
+                        </span>
+                        <i class="fa-solid fa-chevron-${isCollapsed ? 'right' : 'down'}"></i>
+                    </div>
                 </div>
 
-                <div class="league-header-right" style="display: flex; align-items: center; gap: 8px;">
-                    <span class="match-count-badge"
-                          style="display:${isCollapsed ? 'inline-block' : 'none'}; background:#374151; color:#00e676; font-size:11px; padding:2px 6px; border-radius:10px; font-weight:bold;">
-                        ${matchCount}
-                    </span>
-                    <i class="fa-solid fa-chevron-${isCollapsed ? 'right' : 'down'}"></i>
+                <div class="league-matches-container"
+                     style="${isCollapsed ? 'display:none;' : 'display:block;'}">
+                    ${g.items.map(f => {
+                        const s = f.fixture.status.short;
+                        const isLive = isLiveStatus(s);
+                        const isDone = isFinished(s);
+
+                        const getMatchTimeDisplay = (fixture) => {
+                            const elapsed = fixture.status.elapsed;
+                            const extra = fixture.status.extra;
+                            
+                            if (elapsed !== null && elapsed !== undefined) {
+                                if (extra && extra > 0) {
+                                    return `${elapsed}+${extra}'`;
+                                }
+                                return `${elapsed}'`;
+                            }
+                            return '';
+                        };
+
+                        let timeHtml = isLive
+                          ? `<span class="live-time"><span class="live-dot"></span>${getMatchTimeDisplay(f.fixture) || 'LIVE'}</span>`
+                          : isDone
+                            ? `<span class="status-finished">Finished</span>`
+                            : formatHHMM(f.fixture.date);
+
+                        return `
+                            <div class="match-row" data-fixture-id="${f.fixture.id}" data-match-status="${f.fixture.status.short}">
+                                <div class="match-left-group">
+                                    <div class="status-cell">${timeHtml}</div>
+                                    <div class="teams-container">
+                                        <div class="team-line">
+                                            <img class="team-logo" src="${f.teams.home.logo}">
+                                            <span class="team-name">${escapeHtml(f.teams.home.name)}</span>
+                                        </div>
+                                        <div class="team-line">
+                                            <img class="team-logo" src="${f.teams.away.logo}">
+                                            <span class="team-name">${escapeHtml(f.teams.away.name)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="score-section">
+                                    <div class="scores-column">
+                                        <div class="team-score ${isLive ? 'live' : ''}">${f.goals.home ?? "-"}</div>
+                                        <div class="team-score ${isLive ? 'live' : ''}">${f.goals.away ?? "-"}</div>
+                                    </div>
+                                    <div class="vertical-divider"></div>
+                                </div>
+
+                                <div class="match-actions">
+                                    <a class="live-btn ${isLive ? 'active' : 'inactive'}"
+                                       href="https://xoigac.tv/" target="_blank">LIVE</a>
+                                    <button class="odds-btn" data-action="open-odds">ODDS</button>
+                                    <div class="star-btn ${state.favorites.has(f.fixture.id) ? "on" : ""}"
+                                         data-action="toggle-fav">
+                                        <i class="fa-${state.favorites.has(f.fixture.id) ? "solid" : "regular"} fa-star"></i>
+                                    </div>
+                                </div>
+                            </div>`;
+                    }).join("")}
                 </div>
-            </div>
+            </div>`;
+    });
 
-            <div class="league-matches-container"
-                 style="${isCollapsed ? 'display:none;' : 'display:block;'}">
-                ${g.items.map(f => {
-                    const s = f.fixture.status.short;
-                    const isLive = isLiveStatus(s);
-                    const isDone = isFinished(s);
-
-                    let timeHtml = isLive
-                      ? `<span class="live-time"><span class="live-dot"></span>${f.fixture.status.elapsed}'</span>`
-                      : isDone
-                        ? `<span class="status-finished">Finished</span>`
-                        : formatHHMM(f.fixture.date);
-
-                    return `
-                        <div class="match-row" data-fixture-id="${f.fixture.id}">
-                            <div class="match-left-group">
-                                <div class="status-cell">${timeHtml}</div>
-                                <div class="teams-container">
-                                    <div class="team-line">
-                                        <img class="team-logo" src="${f.teams.home.logo}">
-                                        <span class="team-name">${escapeHtml(f.teams.home.name)}</span>
-                                    </div>
-                                    <div class="team-line">
-                                        <img class="team-logo" src="${f.teams.away.logo}">
-                                        <span class="team-name">${escapeHtml(f.teams.away.name)}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="score-section">
-                                <div class="scores-column">
-                                    <div class="team-score ${isLive ? 'live' : ''}">${f.goals.home ?? "-"}</div>
-                                    <div class="team-score ${isLive ? 'live' : ''}">${f.goals.away ?? "-"}</div>
-                                </div>
-                                <div class="vertical-divider"></div>
-                            </div>
-
-                            <div class="match-actions">
-                                <a class="live-btn ${isLive ? 'active' : 'inactive'}"
-                                   href="https://xoigac.tv/" target="_blank">LIVE</a>
-                                <button class="odds-btn" data-action="open-odds">ODDS</button>
-                                <div class="star-btn ${state.favorites.has(f.fixture.id) ? "on" : ""}"
-                                     data-action="toggle-fav">
-                                    <i class="fa-${state.favorites.has(f.fixture.id) ? "solid" : "regular"} fa-star"></i>
-                                </div>
-                            </div>
-                        </div>`;
-                }).join("")}
-            </div>
-        </div>`;
-});
-
-el.innerHTML = html;
-
+    el.innerHTML = html;
 }
-
-// ---------- Right Sidebar ----------
+// Render featured live
 function renderFeaturedLive(live = []) {
   const box = document.getElementById("live-carousel-content");
   if (!box) return;
@@ -552,6 +437,20 @@ function renderFeaturedLive(live = []) {
     return;
   }
   const fx = live[state.carouselIndex % live.length];
+  
+  const getMatchTime = (fixture) => {
+    const elapsed = fixture.status.elapsed;
+    const extra = fixture.status.extra;
+    
+    if (elapsed !== null && elapsed !== undefined) {
+      if (extra && extra > 0) {
+        return `${elapsed}+${extra}'`;
+      }
+      return `${elapsed}'`;
+    }
+    return '';
+  };
+  
   box.innerHTML = `
     <div class="text-center">
       <div class="text-[10px] text-gray-500 mb-2 uppercase tracking-widest">${escapeHtml(fx.league.name)}</div>
@@ -567,21 +466,13 @@ function renderFeaturedLive(live = []) {
         </div>
       </div>
       <div class="mt-4 text-[10px] text-red-500 font-bold animate-pulse tracking-widest">
-  LIVE ${
-    (() => {
-      const elapsed = fx.fixture.status.elapsed ?? 0;
-      const extra = fx.fixture.status.extra;
-      return extra
-        ? `${elapsed}+${extra}'`
-        : elapsed
-          ? `${elapsed}'`
-          : "";
-    })()
-  }
-</div>
+        ${getMatchTime(fx.fixture) ? `<span class="live-dot" style="display: inline-block; width: 6px; height: 6px; background-color: #ef4444; border-radius: 50%; margin-right: 4px; animation: pulse 2s infinite;"></span>${getMatchTime(fx.fixture)}` : 'LIVE'}
+      </div>
+    </div>
   `;
 }
 
+// Render news
 function renderNews(items) {
   const el = document.getElementById("news-container");
   if (!el) return;
@@ -599,88 +490,15 @@ function renderNews(items) {
     </div>`).join("");
 }
 
+// Update live badge
 function updateLiveBadge(live) {
   const tab = document.querySelector(".tab-live");
   if (!tab) return;
-
   const hasLive = Array.isArray(live) && live.length > 0;
   tab.classList.toggle("has-live", hasLive);
 }
 
-// ---------- Match Detail Panel Logic ----------
-async function openMatchDetails(matchId, rowElement) {
-    // 1. 如果点击的是已经打开的详情，执行关闭逻辑
-    const existingDetail = document.querySelector(`.detail-expanded[data-for="${matchId}"]`);
-    if (existingDetail) {
-        existingDetail.remove();
-        rowElement.classList.remove('is-active'); // 关闭时移除绿色高亮
-        return;
-    }
-
-    // 2. 清除所有其他行的详情和激活状态 (确保一次只开一个)
-    document.querySelectorAll('.detail-expanded').forEach(el => el.remove());
-    document.querySelectorAll('.match-row').forEach(r => r.classList.remove('is-active'));
-
-    // 3. 给当前点击的行加上激活类 (.is-active) —— 这会触发你 CSS 里的绿色边框和背景
-    rowElement.classList.add('is-active');
-
-    // 4. 创建详情容器
-    const detailContainer = document.createElement('div');
-    detailContainer.className = 'detail-expanded';
-    detailContainer.dataset.for = matchId;
-    detailContainer.innerHTML = `<div class="inline-loader">Loading details...</div>`;
-    
-    // 5. 将详情插入到当前行之后
-    rowElement.after(detailContainer);
-
-    // 6. 执行平滑滚动 (滚动到该行，扣除 80px 的 Header 空间)
-    setTimeout(() => {
-        rowElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
-
-    // 7. 开始获取数据 (保持你原有的逻辑不变)
-    try {
-        const result = await apiGetJSON(`/api/fixture-detail?id=${matchId}`);
-        const match = extractMatch(result);
-
-        if (!match) {
-            detailContainer.innerHTML = `<div class="p-4 text-center text-gray-500">No data available</div>`;
-            return;
-        }
-
-        // 渲染内部内容
-        detailContainer.innerHTML = `
-          <div class="inline-detail-content">
-            <div class="detail-tabs">
-               <button class="d-tab active" data-target="summary">Summary</button>
-               <button class="d-tab" data-target="stats">Stats</button>
-               <button class="d-tab" data-target="lineups">Lineups</button>
-            </div>
-            <div class="detail-body" id="inline-content-${matchId}">
-               ${renderSummary(match)}
-            </div>
-          </div>
-        `;
-
-        // 绑定 Tab 点击事件 (保持你原有的逻辑不变)
-        detailContainer.querySelectorAll('.d-tab').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const target = btn.dataset.target;
-                const contentEl = document.getElementById(`inline-content-${matchId}`);
-                detailContainer.querySelectorAll('.d-tab').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                if (target === "summary") contentEl.innerHTML = renderSummary(match);
-                else if (target === "stats") contentEl.innerHTML = renderStats(match);
-                else if (target === "lineups") contentEl.innerHTML = renderLineups(match);
-            });
-        });
-
-    } catch (err) {
-        detailContainer.innerHTML = `<div class="p-4 text-center text-red-500">Load failed</div>`;
-    }
-}
-
+// Match detail functions
 function renderSummary(match) {
   if (!Array.isArray(match.events) || !match.events.length) {
     return `<div class="loading-placeholder">No events</div>`;
@@ -689,15 +507,9 @@ function renderSummary(match) {
   const rows = match.events
     .map(ev => {
       const isHome = ev.team?.id === match.teams.home.id;
+      const name = ev.player?.name || ev.assist?.name || ev.player_in?.name || ev.player_out?.name || "";
 
-     const name =
-  ev.player?.name ||
-  ev.assist?.name ||
-  ev.player_in?.name ||
-  ev.player_out?.name ||
-  "";
-
-      if (!name) return null; // 彻底过滤“空白行”
+      if (!name) return null;
 
       let icon = "⚽";
       if (ev.type === "Card") icon = ev.detail === "Yellow Card" ? "🟨" : "🟥";
@@ -708,15 +520,12 @@ function renderSummary(match) {
       return `
         <div class="event-row">
           <div class="event-time">${t}</div>
-
           <div class="event-side home ${isHome ? "show" : ""}">
             ${isHome ? escapeHtml(name) : ""}
           </div>
-
           <div class="event-mid">
             <span class="event-icon">${icon}</span>
           </div>
-
           <div class="event-side away ${!isHome ? "show" : ""}">
             ${!isHome ? escapeHtml(name) : ""}
           </div>
@@ -735,9 +544,7 @@ function renderSummary(match) {
     </div>
   `;
 }
-
-
-// ---------- Stats ----------
+// Render stats
 function renderStats(match) {
   if (!Array.isArray(match.statistics) || match.statistics.length < 2) {
     return `<div class="loading-placeholder">No stats</div>`;
@@ -795,27 +602,24 @@ function renderStats(match) {
   `;
 }
 
-// ---------- Lineups (FINAL CLEAN VERSION) ----------
+// Render lineups
 function renderLineups(match) {
-  const ROW_GAP = 8.5;   // 每一排垂直间距（%）
-  const LEFT_MIN = 12;   // 左边界（%）
-  const LEFT_MAX = 88;   // 右边界（%）
+  const ROW_GAP = 8.5;
+  const LEFT_MIN = 12;
+  const LEFT_MAX = 88;
 
   const lineups = match.lineups;
   if (!Array.isArray(lineups) || lineups.length < 2) {
     return `<div class="loading-placeholder">No lineups</div>`;
   }
 
-  const home =
-    lineups.find(x => x.team?.id === match.teams.home.id) || lineups[0];
-  const away =
-    lineups.find(x => x.team?.id === match.teams.away.id) || lineups[1];
+  const home = lineups.find(x => x.team?.id === match.teams.home.id) || lineups[0];
+  const away = lineups.find(x => x.team?.id === match.teams.away.id) || lineups[1];
 
   const renderSide = (team, isAway) => {
     const players = team.startXI || [];
     if (!players.length) return "";
 
-    // ① 按 row 分组
     const rows = {};
     players.forEach(p => {
       const grid = p.player?.grid;
@@ -826,12 +630,10 @@ function renderLineups(match) {
       rows[row].push({ player: p.player, col });
     });
 
-    // ② 行内按 col 排序（左 → 右）
     Object.values(rows).forEach(arr => {
       arr.sort((a, b) => a.col - b.col);
     });
 
-    // ③ 渲染
     return Object.entries(rows).map(([rowStr, rowPlayers]) => {
       const row = Number(rowStr);
       const count = rowPlayers.length;
@@ -840,25 +642,17 @@ function renderLineups(match) {
       const step = (count <= 1) ? 0 : span / (count - 1);
 
       return rowPlayers.map((item, i) => {
-        const left = (count <= 1)
-          ? 50
-          : LEFT_MIN + step * i;
-
-        const top = isAway
-          ? row * ROW_GAP
-          : 100 - row * ROW_GAP;
-
+        const left = (count <= 1) ? 50 : LEFT_MIN + step * i;
+        const top = isAway ? row * ROW_GAP : 100 - row * ROW_GAP;
         const pl = item.player;
 
         return `
           <div class="player-dot ${isAway ? "away-p" : "home-p"}"
                style="left:${left}%; top:${top}%;">
-
             <div class="shirt">${pl.number ?? ""}</div>
             <div class="name">
               ${escapeHtml(pl.name.split(" ").slice(-1)[0])}
             </div>
-
           </div>
         `;
       }).join("");
@@ -891,31 +685,361 @@ function renderLineups(match) {
     </div>
   `;
 }
+// Match detail panel logic
+async function openMatchDetails(matchId, rowElement) {
+    const existingDetail = document.querySelector(`.detail-expanded[data-for="${matchId}"]`);
+    if (existingDetail) {
+        existingDetail.remove();
+        rowElement.classList.remove('is-active');
+        return;
+    }
 
-// ---------- Refresh & Events ----------
+    document.querySelectorAll('.detail-expanded').forEach(el => el.remove());
+    document.querySelectorAll('.match-row, .result-item, .fixture-match-card').forEach(r => r.classList.remove('is-active'));
+
+    rowElement.classList.add('is-active');
+
+    const detailContainer = document.createElement('div');
+    detailContainer.className = 'detail-expanded';
+    detailContainer.dataset.for = matchId;
+    detailContainer.innerHTML = `
+        <div class="inline-loader">
+            <div class="loading-spinner"></div>
+            <p>Loading match details...</p>
+        </div>
+    `;
+    
+    rowElement.after(detailContainer);
+
+    setTimeout(() => {
+        rowElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+
+    try {
+        const result = await Promise.race([
+            apiGetJSON(`/api/fixture-detail?id=${matchId}`),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout')), 3000)
+            )
+        ]);
+        
+        const match = extractMatch(result);
+
+        if (!match) {
+            detailContainer.innerHTML = `
+                <div class="error-message">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    <h3>No Data Available</h3>
+                    <p>Unable to load match details</p>
+                    <button class="retry-btn" onclick="openMatchDetails(${matchId}, this.closest('.detail-expanded').previousElementSibling)">
+                        <i class="fa-solid fa-refresh"></i> Retry
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const matchStatus = match.fixture.status.short;
+        const isScheduledMatch = isScheduled(matchStatus);
+        const isLiveMatch = isLiveStatus(matchStatus);
+        const isFinishedMatch = isFinished(matchStatus);
+
+        let tabsHtml = '';
+        let contentHtml = '';
+
+        if (isScheduledMatch) {
+            tabsHtml = `
+                <div class="detail-tabs">
+                    <button class="d-tab active" data-target="match">MATCH</button>
+                    <button class="d-tab" data-target="odds">ODDS</button>
+                    <button class="d-tab" data-target="h2h">H2H</button>
+                    <button class="d-tab" data-target="standings">STANDINGS</button>
+                </div>
+            `;
+            contentHtml = renderScheduledContent(match);
+        } else if (isLiveMatch) {
+            tabsHtml = `
+                <div class="detail-tabs">
+                    <button class="d-tab active" data-target="match">MATCH</button>
+                    <button class="d-tab" data-target="odds">ODDS</button>
+                    <button class="d-tab" data-target="h2h">H2H</button>
+                    <button class="d-tab" data-target="standings">STANDINGS</button>
+                </div>
+            `;
+            contentHtml = renderLiveContent(match);
+        } else if (isFinishedMatch) {
+            tabsHtml = `
+                <div class="detail-tabs">
+                    <button class="d-tab active" data-target="match">MATCH</button>
+                    <button class="d-tab" data-target="odds">ODDS</button>
+                    <button class="d-tab" data-target="h2h">H2H</button>
+                    <button class="d-tab" data-target="standings">STANDINGS</button>
+                </div>
+                <div class="detail-sub-tabs" style="display: block;">
+                    <button class="d-sub-tab active" data-target="summary">SUMMARY</button>
+                    <button class="d-sub-tab" data-target="stats">STATS</button>
+                    <button class="d-sub-tab" data-target="lineups">LINEUPS</button>
+                </div>
+            `;
+            contentHtml = renderSummary(match);
+        }
+
+        detailContainer.innerHTML = `
+          <div class="inline-detail-content">
+            <div class="match-header-inline">
+                <div class="teams-score">
+                    <div class="team-info">
+                        <img src="${match.teams.home.logo}" class="team-logo-md">
+                        <span class="team-name">${escapeHtml(match.teams.home.name)}</span>
+                    </div>
+                    <div class="score-display">
+                        ${match.goals.home !== null ? `${match.goals.home} - ${match.goals.away}` : 'VS'}
+                        <div class="match-status">${match.fixture.status.long}</div>
+                    </div>
+                    <div class="team-info">
+                        <img src="${match.teams.away.logo}" class="team-logo-md">
+                        <span class="team-name">${escapeHtml(match.teams.away.name)}</span>
+                    </div>
+                </div>
+            </div>
+            ${tabsHtml}
+            <div class="detail-body" id="inline-content-${matchId}">
+               ${contentHtml}
+            </div>
+          </div>
+        `;
+
+        // Bind main tab events
+        detailContainer.querySelectorAll('.d-tab').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const target = btn.dataset.target;
+                const contentEl = document.getElementById(`inline-content-${matchId}`);
+                
+                detailContainer.querySelectorAll('.d-tab').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const subTabs = detailContainer.querySelector('.detail-sub-tabs');
+                if (target === 'match' && isFinishedMatch) {
+                    if (subTabs) subTabs.style.display = 'block';
+                } else {
+                    if (subTabs) subTabs.style.display = 'none';
+                }
+                
+                contentEl.innerHTML = '<div class="tab-loading"><div class="loading-spinner"></div></div>';
+                
+                setTimeout(() => {
+                    if (target === "match") {
+                        if (isScheduledMatch) contentEl.innerHTML = renderScheduledContent(match);
+                        else if (isLiveMatch) contentEl.innerHTML = renderLiveContent(match);
+                        else if (isFinishedMatch) contentEl.innerHTML = renderSummary(match);
+                    } else if (target === "odds") {
+                        contentEl.innerHTML = renderComingSoon("Odds data will be available soon");
+                    } else if (target === "h2h") {
+                        contentEl.innerHTML = renderComingSoon("Head-to-head data coming soon");
+                    } else if (target === "standings") {
+                        contentEl.innerHTML = renderComingSoon("Standings data coming soon");
+                    }
+                }, 100);
+            });
+        });
+
+        // Bind sub-tab events for finished matches
+        if (isFinishedMatch) {
+            detailContainer.querySelectorAll('.d-sub-tab').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const target = btn.dataset.target;
+                    const contentEl = document.getElementById(`inline-content-${matchId}`);
+                    
+                    detailContainer.querySelectorAll('.d-sub-tab').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    contentEl.innerHTML = '<div class="tab-loading"><div class="loading-spinner"></div></div>';
+                    
+                    setTimeout(() => {
+                        if (target === "summary") contentEl.innerHTML = renderSummary(match);
+                        else if (target === "stats") contentEl.innerHTML = renderStats(match);
+                        else if (target === "lineups") contentEl.innerHTML = renderLineups(match);
+                    }, 100);
+                });
+            });
+        }
+
+    } catch (err) {
+        console.error('Match detail error:', err);
+        detailContainer.innerHTML = `
+            <div class="error-message">
+                <i class="fa-solid fa-wifi"></i>
+                <h3>Connection Error</h3>
+                <p>Please check your connection and try again</p>
+                <button class="retry-btn" onclick="openMatchDetails(${matchId}, this.closest('.detail-expanded').previousElementSibling)">
+                    <i class="fa-solid fa-refresh"></i> Retry
+                </button>
+            </div>
+        `;
+    }
+}
+// Content renderers for different match states
+function renderScheduledContent(match) {
+    const venue = match.fixture.venue;
+    return `
+        <div class="match-info-section">
+            <h3><i class="fa-solid fa-info-circle"></i> Match Information</h3>
+            <div class="venue-info">
+                ${venue?.name ? `
+                    <div class="info-item">
+                        <span class="info-label">Stadium:</span>
+                        <span class="info-value">${escapeHtml(venue.name)}</span>
+                    </div>
+                ` : ''}
+                ${venue?.capacity ? `
+                    <div class="info-item">
+                        <span class="info-label">Capacity:</span>
+                        <span class="info-value">${venue.capacity.toLocaleString()}</span>
+                    </div>
+                ` : ''}
+                ${venue?.city ? `
+                    <div class="info-item">
+                        <span class="info-label">City:</span>
+                        <span class="info-value">${escapeHtml(venue.city)}</span>
+                    </div>
+                ` : ''}
+                <div class="info-item">
+                    <span class="info-label">Date:</span>
+                    <span class="info-value">${new Date(match.fixture.date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    })}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Time:</span>
+                    <span class="info-value">${formatHHMM(match.fixture.date)}</span>
+                </div>
+            </div>
+            
+            <div class="team-form-section">
+                <h3><i class="fa-solid fa-chart-line"></i> Team Form</h3>
+                <div class="form-comparison">
+                    <div class="team-form">
+                        <div class="team-header">
+                            <img src="${match.teams.home.logo}" class="team-logo-sm">
+                            <span>${escapeHtml(match.teams.home.name)}</span>
+                        </div>
+                        <div class="form-dots">
+                            <span class="form-dot form-w">W</span>
+                            <span class="form-dot form-w">W</span>
+                            <span class="form-dot form-d">D</span>
+                            <span class="form-dot form-w">W</span>
+                            <span class="form-dot form-l">L</span>
+                        </div>
+                    </div>
+                    <div class="team-form">
+                        <div class="team-header">
+                            <img src="${match.teams.away.logo}" class="team-logo-sm">
+                            <span>${escapeHtml(match.teams.away.name)}</span>
+                        </div>
+                        <div class="form-dots">
+                            <span class="form-dot form-w">W</span>
+                            <span class="form-dot form-d">D</span>
+                            <span class="form-dot form-w">W</span>
+                            <span class="form-dot form-w">W</span>
+                            <span class="form-dot form-d">D</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderLiveContent(match) {
+    const venue = match.fixture.venue;
+    return `
+        <div class="live-match-section">
+            <div class="match-info-section">
+                <h3><i class="fa-solid fa-info-circle"></i> Match Information</h3>
+                <div class="venue-info">
+                    ${venue?.name ? `
+                        <div class="info-item">
+                            <span class="info-label">Stadium:</span>
+                            <span class="info-value">${escapeHtml(venue.name)}</span>
+                        </div>
+                    ` : ''}
+                    ${venue?.capacity ? `
+                        <div class="info-item">
+                            <span class="info-label">Capacity:</span>
+                            <span class="info-value">${venue.capacity.toLocaleString()}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="live-summary-section">
+                <h3><i class="fa-solid fa-futbol"></i> Live Events</h3>
+                <div class="live-events-tabs">
+                    <button class="live-event-tab active" data-period="all">MATCH</button>
+                    <button class="live-event-tab" data-period="1st">1ST HALF</button>
+                    <button class="live-event-tab" data-period="2nd">2ND HALF</button>
+                </div>
+                <div class="live-events-content">
+                    ${renderSummary(match)}
+                </div>
+            </div>
+            
+            <div class="watch-live-section">
+                <a href="https://xoigac.tv/" target="_blank" class="watch-live-btn">
+                    <i class="fa-solid fa-play"></i>
+                    WATCH LIVE
+                </a>
+            </div>
+            
+            <div class="live-stats-section">
+                <h3><i class="fa-solid fa-chart-bar"></i> Live Stats</h3>
+                <div class="stats-period-tabs">
+                    <button class="stats-period-tab active" data-period="match">MATCH</button>
+                    <button class="stats-period-tab" data-period="1st">1ST HALF</button>
+                    <button class="stats-period-tab" data-period="2nd">2ND HALF</button>
+                </div>
+                <div class="stats-content">
+                    ${renderStats(match)}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderComingSoon(message) {
+    return `
+        <div class="coming-soon">
+            <i class="fa-solid fa-clock"></i>
+            <h3>Coming Soon</h3>
+            <p>${message}</p>
+        </div>
+    `;
+}
+// Refresh and events
 async function refreshAll() {
   if (__REFRESHING__) return;
   __REFRESHING__ = true;
 
   try {
-    // ① 立刻渲染不会等 API 的东西（页面先活过来）
     renderDateStrip();
     renderCompetitions();
 
-    // ② fixtures 最慢，单独 await
     const fx = await loadFixturesByDateCached(state.date);
     state.lastFixtures = fx || [];
     renderFixtures(state.lastFixtures, state.lastLive);
     renderLeftSidebar(state.lastFixtures);
 
-    // ③ live 不阻塞主页面
     loadLive().then(live => {
       state.lastLive = live || [];
       updateLiveBadge(state.lastLive);
       renderFeaturedLive(state.lastLive);
     });
 
-    // ④ news 不阻塞
     loadNews().then(news => {
       renderNews(news || []);
     });
@@ -934,15 +1058,12 @@ function refreshCenter() {
 }
 
 function bindEvents() {
-
-  // 防止重复绑定全局 click
   if (window.__GLOBAL_CLICK_BOUND__) return;
   window.__GLOBAL_CLICK_BOUND__ = true;
 
   // Tabs
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      hideLeaguePage();
       state.tab = btn.dataset.tab;
       state.selectedLeagueId = null;
       document.querySelectorAll(".tab-btn").forEach(b =>
@@ -981,16 +1102,9 @@ function bindEvents() {
   document.getElementById("carousel-prev")?.addEventListener("click", () => { state.carouselIndex = state.carouselIndex > 0 ? state.carouselIndex - 1 : 0; renderFeaturedLive(state.lastLive); });
   document.getElementById("carousel-next")?.addEventListener("click", () => { state.carouselIndex++; renderFeaturedLive(state.lastLive); });
 
-  // ===== Global Clicks (Fav, Filter, Inline Details) =====
+  // Global clicks
   document.addEventListener("click", e => {
-
-    // 0. 返回首页按钮 (新增)
-    if (e.target.closest("#back-to-home")) {
-      hideLeaguePage();
-      return;
-    }
-
-    // 1. 日期 chip 点击
+    // Date chip click
     const chip = e.target.closest(".date-chip");
     if (chip) {
       const [y, m, d] = chip.dataset.ymd.split("-").map(Number);
@@ -1000,15 +1114,15 @@ function bindEvents() {
       return;
     }
 
-    // 2. 收藏星号
+    // Favorite star
     const fav = e.target.closest("[data-action='toggle-fav']");
     if (fav) {
       e.stopPropagation();
-const row = fav.closest(".match-row");
-if (!row) return;
+      const row = fav.closest(".match-row");
+      if (!row) return;
 
-const id = Number(row.dataset.fixtureId || row.getAttribute("data-fixture-id"));
-if (!id) return;
+      const id = Number(row.dataset.fixtureId || row.getAttribute("data-fixture-id"));
+      if (!id) return;
       const isAdding = !state.favorites.has(id);
       if (isAdding) state.favorites.add(id); else state.favorites.delete(id);
       localStorage.setItem("favMatches", JSON.stringify([...state.favorites]));
@@ -1025,7 +1139,7 @@ if (!id) return;
       return;
     }
 
-    // 3. ODDS 按钮
+    // ODDS button
     const oddsBtn = e.target.closest("[data-action='open-odds']");
     if (oddsBtn) {
       e.stopPropagation();
@@ -1033,40 +1147,27 @@ if (!id) return;
       return;
     }
 
-    // 4. LIVE 按钮
+    // LIVE button
     const liveLink = e.target.closest(".live-btn");
     if (liveLink) {
       e.stopPropagation();
       return;
     }
 
-// 5. 侧边栏/列表联赛点击（进入 League Page）
-const lg = e.target.closest("[data-action='filter-league']");
-if (lg) {
-    const lid = Number(lg.dataset.leagueId);
-    state.selectedLeagueId = lid;
-    
-    // 提升体验：先显示详情页并放一个转圈圈
-    showLeaguePage();
-    const summaryContainer = document.getElementById("summary-content");
-    if (summaryContainer) {
-        summaryContainer.innerHTML = `
-            <div class="flex flex-col items-center justify-center p-20">
-                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-[#00e676]"></div>
-                <p class="text-gray-500 mt-4 text-sm">Fetching league data...</p>
-            </div>`;
+    // League filter
+    const lg = e.target.closest("[data-action='filter-league']");
+    if (lg) {
+      const lid = Number(lg.dataset.leagueId);
+      state.selectedLeagueId = lid;
+      refreshCenter();
+      return;
     }
 
-    loadLeaguePage(lid); 
-    return;
-}
-
-    // 5.5 联赛行折叠切换
+    // League header collapse
     const leagueHeader = e.target.closest(".league-header");
-    // 关键修正：只有在非详情页（即主页列表）时才触发折叠逻辑
-    if (leagueHeader && !e.target.closest("#league-page")) {
+    if (leagueHeader) {
       const group = leagueHeader.closest(".league-group");
-      if (!group) return; // 防止在非分组内点击报错
+      if (!group) return;
       
       const leagueId = Number(group.dataset.leagueId);
       const container = group.querySelector(".league-matches-container");
@@ -1087,127 +1188,39 @@ if (lg) {
       return;
     }
 
-    // 6. 点击 match-row 整行，在行下展开详情
+    // Match row click
     const row = e.target.closest(".match-row");
     if (row) {
       if (e.target.closest(".match-actions")) return;
       const matchId = Number(row.dataset.fixtureId);
+      if (!matchId) return;
       openMatchDetails(matchId, row);
     }
-
-  });
-  
-  // 初始化绑定详情页 Tab 切换
-  setupLeagueTabs();
-  
-} // bindEvents 结束
-
-function setupLeagueTabs() {
-  const container = document.getElementById("league-tabs"); 
-  if (!container || container.dataset.init === "true") return;
-  
-  container.dataset.init = "true"; // 防止重复初始化
-
-  container.addEventListener("click", e => {
-    const tab = e.target.closest(".league-tab");
-    if (!tab) return;
-
-    const key = tab.dataset.tab;
-    
-    // 1. 切换 Tab 按钮高亮
-    container.querySelectorAll(".league-tab").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
-
-    // 2. 切换对应的面板
-    document.querySelectorAll(".league-panel").forEach(panel => {
-      panel.classList.toggle("active", panel.id === `league-${key}`);
-    });
-
-    // 3. 只有在面板切换后且容器为空时才加载数据
-    if (key === 'standings') {
-        renderStandingsPlaceholder(); // 先放个加载中
-        // fetchStandings(state.selectedLeagueId); // 稍后实现
-    }
   });
 }
 
-// ---------- Load News Categories for Navigation ----------
-async function loadNavCategories() {
-  try {
-    await window.CONFIG_READY;
-    const apiBase = window.APP_CONFIG?.adminApiUrl || 'http://localhost:8080';
-    const res = await fetch(`${apiBase}/api/public/categories`);
-    const data = await res.json();
-    if (data.success && data.data.length > 0) {
-      const nav = document.getElementById('main-nav');
-      if (nav) {
-        if (nav.getAttribute('data-managed-by') === 'articles-page') {
-          return;
-        }
-
-        const normalizePathname = (pathname) => {
-          const p = String(pathname || '/');
-          if (p !== '/' && p.endsWith('/')) return p.slice(0, -1);
-          return p;
-        };
-
-        const currentPath = normalizePathname(window.location.pathname);
-
-        nav.innerHTML =
-          `<a href="/" class="text-gray-500 hover:text-white transition-colors" style="${currentPath === '/' ? 'color:var(--green)' : ''}">Football</a>` +
-          data.data.map(c => {
-            const href = `/${c.slug}`;
-            const isActive = normalizePathname(href) === currentPath;
-            return `<a href="${href}" class="text-gray-500 hover:text-white transition-colors" style="${isActive ? 'color:var(--green)' : ''}">${c.name}</a>`;
-          }).join('');
-      }
-      
-      // Update footer category links (insert after News Feed)
-      const footerCatLinks = document.getElementById('footer-category-links');
-      if (footerCatLinks) {
-        footerCatLinks.innerHTML = data.data.slice(0, 4).map(c => 
-          `<a href="/${c.slug}" class="footer-link">${c.name}</a>`
-        ).join('');
-      }
-      
-      // Remove the old footer-categories section
-      const oldFooterCats = document.getElementById('footer-categories');
-      if (oldFooterCats) {
-        oldFooterCats.style.display = 'none';
-      }
-    }
-  } catch (err) {
-    console.error('Load nav categories error:', err);
-  }
-}
-
-// ---------- Init ----------
+// Init
 async function init() {
-  // Clock and categories are now loaded in loadComponents()
   bindEvents();
   await refreshAll();
 }
 
-init(); // ✅【就是缺这一行】
+init();
 
 setInterval(() => {
-  const leaguePage = document.getElementById("league-page");
-  const isLeaguePageVisible = leaguePage && !leaguePage.classList.contains("hidden");
+  refreshAll();
+}, 30000);
 
-  if (!isLeaguePageVisible) {
-    refreshAll();
-    return;
-  }
-
+setInterval(() => {
   loadLive().then(live => {
-    state.lastLive = live || [];
-    updateLiveBadge(state.lastLive);
-
-    if (state.selectedLeagueId) {
-      const summaryPanel = document.getElementById("league-summary");
-      if (summaryPanel && summaryPanel.classList.contains("active")) {
-        renderLeagueSummary(state.selectedLeagueId);
+    if (live && live.length > 0) {
+      state.lastLive = live;
+      updateLiveBadge(state.lastLive);
+      renderFeaturedLive(state.lastLive);
+      
+      if (state.tab === 'all' || state.tab === 'live') {
+        renderFixtures(state.lastFixtures, state.lastLive);
       }
     }
   });
-}, 60000);
+}, 15000);
