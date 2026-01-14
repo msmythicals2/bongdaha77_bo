@@ -499,23 +499,53 @@ function updateLiveBadge(live) {
 }
 
 // Match detail functions
-function renderSummary(match) {
+function renderSummary(match, period = 'all') {
   if (!Array.isArray(match.events) || !match.events.length) {
     return `<div class="loading-placeholder">No events</div>`;
   }
 
-  const rows = match.events
+  // 根据period过滤事件
+  let filteredEvents = match.events;
+  if (period === '1st') {
+    filteredEvents = match.events.filter(ev => {
+      const elapsed = ev.time?.elapsed || 0;
+      return elapsed <= 45;
+    });
+  } else if (period === '2nd') {
+    filteredEvents = match.events.filter(ev => {
+      const elapsed = ev.time?.elapsed || 0;
+      return elapsed > 45;
+    });
+  }
+
+  const rows = filteredEvents
     .map(ev => {
       const isHome = ev.team?.id === match.teams.home.id;
       const name = ev.player?.name || ev.assist?.name || ev.player_in?.name || ev.player_out?.name || "";
 
       if (!name) return null;
 
-      let icon = "⚽";
-      if (ev.type === "Card") icon = ev.detail === "Yellow Card" ? "🟨" : "🟥";
-      if (ev.type === "subst") icon = "🔄";
+      let icon = '<img src="/images/icons/goal.svg" class="event-icon-img" alt="Goal">';
+      if (ev.type === "Card") {
+        icon = ev.detail === "Yellow Card" 
+          ? '<img src="/images/icons/yellow-card.svg" class="event-icon-img" alt="Yellow Card">' 
+          : '<img src="/images/icons/red-card.svg" class="event-icon-img" alt="Red Card">';
+      }
+      if (ev.type === "subst") {
+        icon = '<img src="/images/icons/substitute-player.svg" class="event-icon-img" alt="Substitution">';
+      }
 
-      const t = ev.time?.elapsed != null ? `${ev.time.elapsed}'` : "";
+      // 显示时间，包含加时时间
+      let t = "";
+      if (ev.time?.elapsed != null) {
+        const elapsed = ev.time.elapsed;
+        const extra = ev.time.extra;
+        if (extra && extra > 0) {
+          t = `${elapsed}+${extra}'`;
+        } else {
+          t = `${elapsed}'`;
+        }
+      }
 
       return `
         <div class="event-row">
@@ -535,7 +565,7 @@ function renderSummary(match) {
     .filter(Boolean);
 
   if (!rows.length) {
-    return `<div class="loading-placeholder">No visible events</div>`;
+    return `<div class="loading-placeholder">No events in this period</div>`;
   }
 
   return `
@@ -545,69 +575,224 @@ function renderSummary(match) {
   `;
 }
 // Render stats
-function renderStats(match) {
+function renderStats(match, period = 'match') {
   if (!Array.isArray(match.statistics) || match.statistics.length < 2) {
     return `<div class="loading-placeholder">No stats</div>`;
   }
 
-  const homeStats = match.statistics[0]?.statistics || [];
-  const awayStats = match.statistics[1]?.statistics || [];
+  // 根据period选择对应的统计数据
+  let homeStats, awayStats;
+  
+  if (period === '1st') {
+    // 查找1st half的统计数据
+    const homeTeam = match.statistics.find(s => s.team?.id === match.teams.home.id);
+    const awayTeam = match.statistics.find(s => s.team?.id === match.teams.away.id);
+    
+    // 如果有periods数据，使用1st half的数据
+    if (homeTeam?.periods && homeTeam.periods['1st']) {
+      homeStats = homeTeam.periods['1st'].statistics || [];
+    } else {
+      homeStats = homeTeam?.statistics || [];
+    }
+    
+    if (awayTeam?.periods && awayTeam.periods['1st']) {
+      awayStats = awayTeam.periods['1st'].statistics || [];
+    } else {
+      awayStats = awayTeam?.statistics || [];
+    }
+  } else if (period === '2nd') {
+    // 查找2nd half的统计数据
+    const homeTeam = match.statistics.find(s => s.team?.id === match.teams.home.id);
+    const awayTeam = match.statistics.find(s => s.team?.id === match.teams.away.id);
+    
+    // 如果有periods数据，使用2nd half的数据
+    if (homeTeam?.periods && homeTeam.periods['2nd']) {
+      homeStats = homeTeam.periods['2nd'].statistics || [];
+    } else {
+      homeStats = homeTeam?.statistics || [];
+    }
+    
+    if (awayTeam?.periods && awayTeam.periods['2nd']) {
+      awayStats = awayTeam.periods['2nd'].statistics || [];
+    } else {
+      awayStats = awayTeam?.statistics || [];
+    }
+  } else {
+    // MATCH - 显示全场统计
+    homeStats = match.statistics[0]?.statistics || [];
+    awayStats = match.statistics[1]?.statistics || [];
+  }
 
-  const types = [
-    "Ball Possession",
-    "Total Shots",
-    "Shots on Goal",
-    "Corner Kicks"
-  ];
+  // 定义所有统计类型分组
+  const statGroups = {
+    "TOP STATS": [
+      { type: "expected_goals", label: "Expected goals (xG)", format: "decimal" },
+      { type: "Ball Possession", label: "Ball Possession", format: "percent" },
+      { type: "Total Shots", label: "Total Shots", format: "number" },
+      { type: "Shots on Goal", label: "Shots on Target", format: "number" },
+      { type: "Big Chances", label: "Big Chances", format: "number" },
+      { type: "Corner Kicks", label: "Corner Kicks", format: "number" },
+      { type: "passes_percentage", label: "Passes", format: "passes" },
+      { type: "Yellow Cards", label: "Yellow Cards", format: "number" }
+    ],
+    "SHOTS": [
+      { type: "expected_goals", label: "Expected goals (xG)", format: "decimal" },
+      { type: "xg_on_target", label: "xG on target (xGOT)", format: "decimal" },
+      { type: "Total Shots", label: "Total Shots", format: "number" },
+      { type: "Shots on Goal", label: "Shots on Target", format: "number" },
+      { type: "Shots off Goal", label: "Shots off Target", format: "number" },
+      { type: "Blocked Shots", label: "Blocked Shots", format: "number" },
+      { type: "Shots insidebox", label: "Shots inside the Box", format: "number" },
+      { type: "Shots outsidebox", label: "Shots outside the Box", format: "number" },
+      { type: "Hit woodwork", label: "Hit the Woodwork", format: "number" },
+      { type: "headed_goals", label: "Headed Goals", format: "number" }
+    ],
+    "ATTACK": [
+      { type: "Big Chances", label: "Big Chances", format: "number" },
+      { type: "Corner Kicks", label: "Corner Kicks", format: "number" },
+      { type: "touches_in_opposition_box", label: "Touches in Opposition Box", format: "number" },
+      { type: "accurate_through_passes", label: "Accurate Through Passes", format: "number" },
+      { type: "Offsides", label: "Offsides", format: "number" },
+      { type: "free_kicks", label: "Free Kicks", format: "number" }
+    ],
+    "PASSES": [
+      { type: "passes_percentage", label: "Passes", format: "passes" },
+      { type: "long_passes", label: "Long Passes", format: "passes_detail" },
+      { type: "passes_in_final_third", label: "Passes in Final Third", format: "passes_detail" },
+      { type: "crosses", label: "Crosses", format: "passes_detail" },
+      { type: "expected_assists", label: "Expected Assists (xA)", format: "decimal" },
+      { type: "throw_ins", label: "Throw Ins", format: "number" }
+    ],
+    "DEFENSE": [
+      { type: "Fouls", label: "Fouls", format: "number" },
+      { type: "tackles", label: "Tackles", format: "tackles" },
+      { type: "duels_won", label: "Duels Won", format: "number" },
+      { type: "Clearances", label: "Clearances", format: "number" },
+      { type: "interceptions", label: "Interceptions", format: "number" },
+      { type: "errors_leading_to_shot", label: "Errors Leading to Shot", format: "number" },
+      { type: "errors_leading_to_goal", label: "Errors Leading to Goal", format: "number" }
+    ],
+    "GOALKEEPING": [
+      { type: "Goalkeeper Saves", label: "Goalkeeper Saves", format: "number" },
+      { type: "xgot_faced", label: "xGOT Faced", format: "decimal" },
+      { type: "goals_prevented", label: "Goals Prevented", format: "decimal" }
+    ]
+  };
 
   const getValNum = (v) => {
     if (v == null) return 0;
     if (typeof v === "number") return v;
-    if (typeof v === "string") return parseInt(v.replace("%",""), 10) || 0;
+    if (typeof v === "string") return parseFloat(v.replace("%","")) || 0;
     return 0;
   };
 
-  return `
-    <div class="stats-container">
-      ${types.map(type => {
-        const hRaw = homeStats.find(s => s.type === type)?.value ?? 0;
-        const aRaw = awayStats.find(s => s.type === type)?.value ?? 0;
+  const getStat = (stats, type) => {
+    return stats.find(s => s.type === type)?.value ?? null;
+  };
 
-        const h = getValNum(hRaw);
-        const a = getValNum(aRaw);
+  const renderStatGroup = (title, statTypes) => {
+    const items = statTypes.map(({ type, label, format }) => {
+      const hRaw = getStat(homeStats, type);
+      const aRaw = getStat(awayStats, type);
 
-        const total = (h + a) || 1;
-        const hPct = Math.round((h / total) * 100);
-        const aPct = 100 - hPct;
+      if (hRaw === null && aRaw === null) return '';
 
-        const homeLead = h > a;
-        const awayLead = a > h;
+      const h = getValNum(hRaw);
+      const a = getValNum(aRaw);
 
-        return `
-          <div class="stat-item">
-            <div class="stat-info">
-              <span class="stat-side ${homeLead ? "lead" : ""}">${escapeHtml(String(hRaw))}</span>
-              <span class="stat-type">${escapeHtml(type)}</span>
-              <span class="stat-side ${awayLead ? "lead" : ""}">${escapeHtml(String(aRaw))}</span>
+      const total = (h + a) || 1;
+      const hPct = Math.round((h / total) * 100);
+      const aPct = 100 - hPct;
+
+      const homeLead = h > a;
+      const awayLead = a > h;
+
+      // 格式化显示值
+      let hDisplay = hRaw;
+      let aDisplay = aRaw;
+      
+      if (format === "passes") {
+        const hTotal = getStat(homeStats, "Total passes");
+        const aTotal = getStat(awayStats, "Total passes");
+        const hAcc = getStat(homeStats, "Passes accurate");
+        const aAcc = getStat(awayStats, "Passes accurate");
+        if (hAcc && hTotal) {
+          const hPercent = Math.round((getValNum(hAcc)/getValNum(hTotal))*100);
+          hDisplay = `${hPercent}%\n(${hAcc}/${hTotal})`;
+        }
+        if (aAcc && aTotal) {
+          const aPercent = Math.round((getValNum(aAcc)/getValNum(aTotal))*100);
+          aDisplay = `${aPercent}%\n(${aAcc}/${aTotal})`;
+        }
+      } else if (format === "passes_detail") {
+        const hTotal = getStat(homeStats, type.replace('_', ' ') + ' total');
+        const hAcc = getStat(homeStats, type.replace('_', ' ') + ' accurate');
+        if (hAcc && hTotal) {
+          const hPercent = Math.round((getValNum(hAcc)/getValNum(hTotal))*100);
+          hDisplay = `${hPercent}%\n(${hAcc}/${hTotal})`;
+        }
+        const aTotal = getStat(awayStats, type.replace('_', ' ') + ' total');
+        const aAcc = getStat(awayStats, type.replace('_', ' ') + ' accurate');
+        if (aAcc && aTotal) {
+          const aPercent = Math.round((getValNum(aAcc)/getValNum(aTotal))*100);
+          aDisplay = `${aPercent}%\n(${aAcc}/${aTotal})`;
+        }
+      } else if (format === "tackles") {
+        const hTotal = getStat(homeStats, "Total tackles");
+        const hSuccess = getStat(homeStats, "tackles_successful");
+        if (hSuccess && hTotal) {
+          const hPercent = Math.round((getValNum(hSuccess)/getValNum(hTotal))*100);
+          hDisplay = `${hPercent}%\n(${hSuccess}/${hTotal})`;
+        }
+        const aTotal = getStat(awayStats, "Total tackles");
+        const aSuccess = getStat(awayStats, "tackles_successful");
+        if (aSuccess && aTotal) {
+          const aPercent = Math.round((getValNum(aSuccess)/getValNum(aTotal))*100);
+          aDisplay = `${aPercent}%\n(${aSuccess}/${aTotal})`;
+        }
+      } else if (format === "decimal") {
+        hDisplay = h.toFixed(2);
+        aDisplay = a.toFixed(2);
+      }
+
+      return `
+        <div class="stat-item-enhanced">
+          <div class="stat-values">
+            <span class="stat-value-left ${homeLead ? "lead" : ""}">${escapeHtml(String(hDisplay)).replace('\n', '<br>')}</span>
+            <span class="stat-label">${escapeHtml(label)}</span>
+            <span class="stat-value-right ${awayLead ? "lead" : ""}">${escapeHtml(String(aDisplay)).replace('\n', '<br>')}</span>
+          </div>
+          <div class="stat-bar-split-fixed">
+            <div class="stat-bar-half stat-bar-left">
+              <div class="stat-bar-fill ${homeLead ? "lead" : ""}" style="width:${hPct}%"></div>
             </div>
-
-            <div class="stat-bar-bg">
-              <div class="stat-bar-home ${homeLead ? "lead" : ""}" style="width:${hPct}%"></div>
-              <div class="stat-bar-away ${awayLead ? "lead" : ""}" style="width:${aPct}%"></div>
+            <div class="stat-bar-half stat-bar-right">
+              <div class="stat-bar-fill ${awayLead ? "lead" : ""}" style="width:${aPct}%"></div>
             </div>
           </div>
-        `;
-      }).join("")}
+        </div>
+      `;
+    }).filter(Boolean);
+
+    if (items.length === 0) return '';
+
+    return `
+      <div class="stats-group">
+        <div class="stats-group-title">${title}</div>
+        ${items.join("")}
+      </div>
+    `;
+  };
+
+  return `
+    <div class="stats-container-enhanced">
+      ${Object.entries(statGroups).map(([title, stats]) => renderStatGroup(title, stats)).filter(Boolean).join("")}
     </div>
   `;
 }
 
 // Render lineups
 function renderLineups(match) {
-  const ROW_GAP = 8.5;
-  const LEFT_MIN = 12;
-  const LEFT_MAX = 88;
-
   const lineups = match.lineups;
   if (!Array.isArray(lineups) || lineups.length < 2) {
     return `<div class="loading-placeholder">No lineups</div>`;
@@ -616,104 +801,527 @@ function renderLineups(match) {
   const home = lineups.find(x => x.team?.id === match.teams.home.id) || lineups[0];
   const away = lineups.find(x => x.team?.id === match.teams.away.id) || lineups[1];
 
-  const renderSide = (team, isAway) => {
-    const players = team.startXI || [];
-    if (!players.length) return "";
+  // Pitch view rendering
+  const renderPitchView = () => {
+    const renderSide = (team, isHome) => {
+      const players = team.startXI || [];
+      if (!players.length) return "";
 
-    const rows = {};
-    players.forEach(p => {
-      const grid = p.player?.grid;
-      if (!grid) return;
+      const rows = {};
+      players.forEach(p => {
+        const grid = p.player?.grid;
+        if (!grid) return;
 
-      const [row, col] = grid.split(":").map(Number);
-      if (!rows[row]) rows[row] = [];
-      rows[row].push({ player: p.player, col });
-    });
+        const [row, col] = grid.split(":").map(Number);
+        if (!rows[row]) rows[row] = [];
+        rows[row].push({ player: p.player, col });
+      });
 
-    Object.values(rows).forEach(arr => {
-      arr.sort((a, b) => a.col - b.col);
-    });
+      Object.values(rows).forEach(arr => {
+        arr.sort((a, b) => a.col - b.col);
+      });
 
-    return Object.entries(rows).map(([rowStr, rowPlayers]) => {
-      const row = Number(rowStr);
-      const count = rowPlayers.length;
+      return Object.entries(rows).map(([rowStr, rowPlayers]) => {
+        const row = Number(rowStr);
+        const count = rowPlayers.length;
 
-      const span = LEFT_MAX - LEFT_MIN;
-      const step = (count <= 1) ? 0 : span / (count - 1);
+        // Calculate positions for horizontal pitch
+        const verticalSpan = 80; // 10% to 90%
+        const verticalMin = 10;
+        const verticalStep = (count <= 1) ? 0 : verticalSpan / (count - 1);
 
-      return rowPlayers.map((item, i) => {
-        const left = (count <= 1) ? 50 : LEFT_MIN + step * i;
-        const top = isAway ? row * ROW_GAP : 100 - row * ROW_GAP;
-        const pl = item.player;
+        return rowPlayers.map((item, i) => {
+          const pl = item.player;
+          
+          // Horizontal position (left to right)
+          const horizontalPos = isHome ? (row * 9) : (100 - row * 9);
+          
+          // Vertical position (top to bottom)
+          const verticalPos = (count <= 1) ? 50 : verticalMin + verticalStep * i;
+          
+          const rating = pl.rating ? parseFloat(pl.rating) : null;
+          const ratingColor = rating ? (
+            rating >= 8.0 ? '#00e676' :
+            rating >= 7.0 ? '#76ff03' :
+            rating >= 6.5 ? '#ffa726' : '#ff5252'
+          ) : null;
 
-        return `
-          <div class="player-dot ${isAway ? "away-p" : "home-p"}"
-               style="left:${left}%; top:${top}%;">
-            <div class="shirt">${pl.number ?? ""}</div>
-            <div class="name">
-              ${escapeHtml(pl.name.split(" ").slice(-1)[0])}
+          return `
+            <div class="player-dot-horizontal ${isHome ? "home-p" : "away-p"}"
+                 style="left:${horizontalPos}%; top:${verticalPos}%;">
+              ${rating ? `<div class="player-rating-badge" style="background: ${ratingColor}">${rating}</div>` : ''}
+              <div class="player-shirt">${pl.number ?? ""}</div>
+              <div class="player-name-horizontal">
+                ${escapeHtml(pl.name.split(" ").slice(-1)[0])}
+              </div>
+            </div>
+          `;
+        }).join("");
+      }).join("");
+    };
+
+    return `
+      <div class="pitch-horizontal-container">
+        <div class="pitch-header">
+          <div class="pitch-team-info home-info">
+            <img src="${home.team.logo}" class="pitch-team-logo">
+            <span class="pitch-team-name">${escapeHtml(home.team.name)}</span>
+            <span class="pitch-formation">${home.formation || "N/A"}</span>
+          </div>
+          
+          <div class="pitch-title">FORMATION</div>
+          
+          <div class="pitch-team-info away-info">
+            <span class="pitch-formation">${away.formation || "N/A"}</span>
+            <span class="pitch-team-name">${escapeHtml(away.team.name)}</span>
+            <img src="${away.team.logo}" class="pitch-team-logo">
+          </div>
+        </div>
+        
+        <div class="pitch-horizontal">
+          <div class="pitch-markings-horizontal">
+            <div class="center-line-h"></div>
+            <div class="center-circle-h"></div>
+            <div class="penalty-area-h left"></div>
+            <div class="penalty-area-h right"></div>
+            <div class="goal-area-h left"></div>
+            <div class="goal-area-h right"></div>
+            <div class="corner-arc top-left"></div>
+            <div class="corner-arc top-right"></div>
+            <div class="corner-arc bottom-left"></div>
+            <div class="corner-arc bottom-right"></div>
+          </div>
+
+          ${renderSide(home, true)}
+          ${renderSide(away, false)}
+        </div>
+      </div>
+    `;
+  };
+
+  // List view rendering
+  const renderPlayerRow = (player, showRating = true) => {
+    const number = player.number ?? '-';
+    const name = player.name || 'Unknown';
+    const photo = player.photo || null;
+    const rating = player.rating || null;
+    
+    return `
+      <div class="lineup-player-row">
+        <div class="lineup-player-info">
+          ${photo ? `<img src="${photo}" class="lineup-player-photo" alt="${escapeHtml(name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` : ''}
+          <div class="lineup-player-avatar" style="display: ${photo ? 'none' : 'flex'}">
+            <i class="fa-solid fa-user"></i>
+          </div>
+          <span class="lineup-player-name">${escapeHtml(name)}</span>
+        </div>
+        <div class="lineup-player-number">${number}</div>
+        ${showRating && rating ? `<div class="lineup-player-rating" style="background: ${getRatingColor(rating)}">${rating}</div>` : ''}
+      </div>
+    `;
+  };
+
+  const renderSubstitution = (sub) => {
+    const playerIn = sub.player;
+    const playerOut = sub.assist;
+    const time = sub.time?.elapsed || '-';
+    const photo = playerIn.photo || null;
+    
+    return `
+      <div class="lineup-sub-row">
+        <div class="lineup-sub-player">
+          ${photo ? `<img src="${photo}" class="lineup-sub-photo" alt="${escapeHtml(playerIn.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` : ''}
+          <div class="lineup-sub-avatar" style="display: ${photo ? 'none' : 'flex'}">
+            <i class="fa-solid fa-user"></i>
+          </div>
+          <div class="lineup-sub-info">
+            <span class="lineup-sub-name">${escapeHtml(playerIn.name)}</span>
+            <span class="lineup-sub-detail"><i class="fa-solid fa-arrow-rotate-left"></i> ${escapeHtml(playerOut?.name || 'Unknown')} ${time}'</span>
+          </div>
+        </div>
+        <div class="lineup-sub-number">${playerIn.number ?? '-'}</div>
+      </div>
+    `;
+  };
+
+  const getRatingColor = (rating) => {
+    const r = parseFloat(rating);
+    if (r >= 8.0) return '#00e676';
+    if (r >= 7.0) return '#76ff03';
+    if (r >= 6.5) return '#ffa726';
+    return '#ff5252';
+  };
+
+  const renderTeamLineup = (team, isHome) => {
+    const startXI = team.startXI || [];
+    const substitutes = team.substitutes || [];
+    
+    // Get substitution events from match events
+    const teamId = team.team.id;
+    const substitutions = (match.events || []).filter(ev => 
+      ev.type === 'subst' && 
+      (ev.team.id === teamId)
+    );
+
+    return `
+      <div class="lineup-team-section">
+        <div class="lineup-team-header">
+          <img src="${team.team.logo}" class="lineup-team-logo">
+          <div class="lineup-team-info">
+            <h3>${escapeHtml(team.team.name)}</h3>
+            <span class="lineup-formation">${team.formation || 'N/A'}</span>
+          </div>
+        </div>
+
+        <div class="lineup-section">
+          <h4 class="lineup-section-title">STARTING XI</h4>
+          <div class="lineup-players-list">
+            ${startXI.map(p => renderPlayerRow(p.player, true)).join('')}
+          </div>
+        </div>
+
+        ${substitutions.length > 0 ? `
+          <div class="lineup-section">
+            <h4 class="lineup-section-title">SUBSTITUTED PLAYERS</h4>
+            <div class="lineup-subs-list">
+              ${substitutions.map(sub => renderSubstitution(sub)).join('')}
             </div>
           </div>
-        `;
-      }).join("");
-    }).join("");
+        ` : ''}
+
+        ${substitutes.length > 0 ? `
+          <div class="lineup-section">
+            <h4 class="lineup-section-title">SUBSTITUTES</h4>
+            <div class="lineup-players-list">
+              ${substitutes.map(p => renderPlayerRow(p.player, false)).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  };
+
+  const renderListView = () => {
+    return `
+      <div class="lineups-container-new">
+        <div class="lineups-grid">
+          ${renderTeamLineup(home, true)}
+          ${renderTeamLineup(away, false)}
+        </div>
+      </div>
+    `;
   };
 
   return `
-    <div class="lineup-container">
-      <div class="pitch">
-        <div class="pitch-markings">
-          <div class="half-line"></div>
-          <div class="center-circle"></div>
-          <div class="penalty-area top"></div>
-          <div class="penalty-area bottom"></div>
-          <div class="goal-area top"></div>
-          <div class="goal-area bottom"></div>
+    <div class="lineups-wrapper">
+      <div class="lineups-view-toggle">
+        <button class="lineup-view-btn active" data-view="pitch">
+          <i class="fa-solid fa-futbol"></i> FORMATION
+        </button>
+        <button class="lineup-view-btn" data-view="list">
+          <i class="fa-solid fa-list"></i> PLAYERS
+        </button>
+      </div>
+      
+      <div class="lineups-views">
+        <div class="lineup-view-content active" data-view="pitch">
+          ${renderPitchView()}
         </div>
-
-        <div class="team-label away-label">
-          ${escapeHtml(away.team.name)} · ${away.formation || ""}
+        <div class="lineup-view-content" data-view="list">
+          ${renderListView()}
         </div>
-
-        <div class="team-label home-label">
-          ${escapeHtml(home.team.name)} · ${home.formation || ""}
-        </div>
-
-        ${renderSide(away, true)}
-        ${renderSide(home, false)}
       </div>
     </div>
   `;
 }
+
+// Render H2H (Head to Head)
+async function renderH2H(match) {
+  const homeId = match.teams.home.id;
+  const awayId = match.teams.away.id;
+  const h2hParam = `${homeId}-${awayId}`;
+  
+  try {
+    // Fetch H2H data
+    const h2hData = await apiGetJSON(`/api/h2h?h2h=${h2hParam}`);
+    
+    if (!h2hData || h2hData.length === 0) {
+      return `
+        <div class="h2h-container">
+          <div class="h2h-header">
+            <h3><i class="fa-solid fa-trophy"></i> Head to Head</h3>
+            <p class="h2h-subtitle">Recent matches between these teams</p>
+          </div>
+          <div class="h2h-placeholder">
+            <i class="fa-solid fa-chart-line"></i>
+            <p>No head-to-head data available</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Separate matches by team
+    const homeTeamMatches = [];
+    const awayTeamMatches = [];
+    const h2hMatches = [];
+    
+    h2hData.forEach(fixture => {
+      const isH2H = (fixture.teams.home.id === homeId && fixture.teams.away.id === awayId) ||
+                    (fixture.teams.home.id === awayId && fixture.teams.away.id === homeId);
+      
+      if (isH2H) {
+        h2hMatches.push(fixture);
+      } else if (fixture.teams.home.id === homeId || fixture.teams.away.id === homeId) {
+        homeTeamMatches.push(fixture);
+      } else if (fixture.teams.home.id === awayId || fixture.teams.away.id === awayId) {
+        awayTeamMatches.push(fixture);
+      }
+    });
+    
+    const renderMatchRow = (fixture, highlightTeamId) => {
+      const date = new Date(fixture.fixture.date);
+      const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const homeGoals = fixture.goals.home ?? 0;
+      const awayGoals = fixture.goals.away ?? 0;
+      
+      let resultClass = '';
+      if (fixture.teams.home.id === highlightTeamId) {
+        resultClass = homeGoals > awayGoals ? 'win' : homeGoals < awayGoals ? 'loss' : 'draw';
+      } else if (fixture.teams.away.id === highlightTeamId) {
+        resultClass = awayGoals > homeGoals ? 'win' : awayGoals < homeGoals ? 'loss' : 'draw';
+      }
+      
+      return `
+        <div class="h2h-match-row">
+          <div class="h2h-date">${dateStr}</div>
+          <div class="h2h-league">
+            <img src="${fixture.league.flag || fixture.league.logo}" class="h2h-flag" alt="${escapeHtml(fixture.league.country)}">
+            <span>${escapeHtml(fixture.league.name)}</span>
+          </div>
+          <div class="h2h-teams">
+            <div class="h2h-team-name">
+              <img src="${fixture.teams.home.logo}" class="h2h-team-logo">
+              <span>${escapeHtml(fixture.teams.home.name)}</span>
+            </div>
+            <div class="h2h-score">${homeGoals} - ${awayGoals}</div>
+            <div class="h2h-team-name">
+              <img src="${fixture.teams.away.logo}" class="h2h-team-logo">
+              <span>${escapeHtml(fixture.teams.away.name)}</span>
+            </div>
+          </div>
+          <div class="h2h-result ${resultClass}">${resultClass.toUpperCase()[0] || '-'}</div>
+        </div>
+      `;
+    };
+    
+    return `
+      <div class="h2h-container">
+        <div class="h2h-header">
+          <h3><i class="fa-solid fa-trophy"></i> Head to Head</h3>
+          <p class="h2h-subtitle">Recent matches between these teams</p>
+        </div>
+        
+        <div class="h2h-tabs">
+          <button class="h2h-tab active" data-section="overall">OVERALL</button>
+          <button class="h2h-tab" data-section="home">${escapeHtml(match.teams.home.name).toUpperCase()} - HOME</button>
+          <button class="h2h-tab" data-section="away">${escapeHtml(match.teams.away.name).toUpperCase()} - AWAY</button>
+        </div>
+        
+        <div class="h2h-content">
+          <div class="h2h-section active" data-section="overall">
+            ${h2hMatches.length > 0 ? `
+              <h4>HEAD-TO-HEAD MATCHES</h4>
+              ${h2hMatches.slice(0, 10).map(f => renderMatchRow(f, null)).join('')}
+            ` : '<p class="h2h-no-data">No head-to-head matches found</p>'}
+          </div>
+          
+          <div class="h2h-section" data-section="home">
+            <h4>LAST MATCHES: ${escapeHtml(match.teams.home.name).toUpperCase()}</h4>
+            ${homeTeamMatches.slice(0, 5).map(f => renderMatchRow(f, homeId)).join('')}
+          </div>
+          
+          <div class="h2h-section" data-section="away">
+            <h4>LAST MATCHES: ${escapeHtml(match.teams.away.name).toUpperCase()}</h4>
+            ${awayTeamMatches.slice(0, 5).map(f => renderMatchRow(f, awayId)).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    console.error('H2H error:', err);
+    return `
+      <div class="h2h-container">
+        <div class="h2h-header">
+          <h3><i class="fa-solid fa-trophy"></i> Head to Head</h3>
+        </div>
+        <div class="h2h-placeholder">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          <p>Error loading head-to-head data</p>
+        </div>
+      </div>
+    `;
+  }
+}
+
+// Render Standings
+async function renderStandings(match) {
+  const leagueId = match.league.id;
+  const season = match.league.season;
+  
+  try {
+    // Fetch standings data
+    const standingsData = await apiGetJSON(`/api/standings?league=${leagueId}&season=${season}`);
+    
+    if (!standingsData || standingsData.length === 0) {
+      return `
+        <div class="standings-container">
+          <div class="standings-header">
+            <h3><i class="fa-solid fa-ranking-star"></i> League Standings</h3>
+            <p class="standings-subtitle">${escapeHtml(match.league.name)} - ${season}</p>
+          </div>
+          <div class="standings-placeholder">
+            <i class="fa-solid fa-table"></i>
+            <p>No standings data available</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    const standings = standingsData[0]?.league?.standings?.[0] || [];
+    
+    if (standings.length === 0) {
+      return `
+        <div class="standings-container">
+          <div class="standings-header">
+            <h3><i class="fa-solid fa-ranking-star"></i> League Standings</h3>
+            <p class="standings-subtitle">${escapeHtml(match.league.name)} - ${season}</p>
+          </div>
+          <div class="standings-placeholder">
+            <i class="fa-solid fa-table"></i>
+            <p>No standings data available</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    const homeTeamId = match.teams.home.id;
+    const awayTeamId = match.teams.away.id;
+    
+    const renderFormBadge = (form) => {
+      if (!form) return '';
+      return form.split('').slice(-5).map(result => {
+        const className = result === 'W' ? 'win' : result === 'L' ? 'loss' : 'draw';
+        return `<span class="form-badge ${className}">${result}</span>`;
+      }).join('');
+    };
+    
+    return `
+      <div class="standings-container">
+        <div class="standings-header">
+          <h3><i class="fa-solid fa-ranking-star"></i> League Standings</h3>
+          <p class="standings-subtitle">${escapeHtml(match.league.name)} - ${season}</p>
+        </div>
+        
+        <div class="standings-table">
+          <div class="standings-table-header">
+            <div class="st-rank">#</div>
+            <div class="st-team">TEAM</div>
+            <div class="st-stat">MP</div>
+            <div class="st-stat">W</div>
+            <div class="st-stat">D</div>
+            <div class="st-stat">L</div>
+            <div class="st-stat">G</div>
+            <div class="st-stat">GD</div>
+            <div class="st-stat">PTS</div>
+            <div class="st-form">FORM</div>
+          </div>
+          
+          ${standings.map(team => {
+            const isHomeTeam = team.team.id === homeTeamId;
+            const isAwayTeam = team.team.id === awayTeamId;
+            const highlightClass = isHomeTeam || isAwayTeam ? 'highlight' : '';
+            
+            return `
+              <div class="standings-table-row ${highlightClass}">
+                <div class="st-rank">
+                  <span class="rank-number" style="background: ${team.rank <= 4 ? '#00e676' : team.rank <= 6 ? '#2196f3' : team.rank >= standings.length - 2 ? '#ff3b3b' : 'transparent'}">${team.rank}</span>
+                </div>
+                <div class="st-team">
+                  <img src="${team.team.logo}" class="st-team-logo">
+                  <span>${escapeHtml(team.team.name)}</span>
+                </div>
+                <div class="st-stat">${team.all.played}</div>
+                <div class="st-stat">${team.all.win}</div>
+                <div class="st-stat">${team.all.draw}</div>
+                <div class="st-stat">${team.all.lose}</div>
+                <div class="st-stat">${team.all.goals.for}:${team.all.goals.against}</div>
+                <div class="st-stat ${team.goalsDiff > 0 ? 'positive' : team.goalsDiff < 0 ? 'negative' : ''}">${team.goalsDiff > 0 ? '+' : ''}${team.goalsDiff}</div>
+                <div class="st-stat st-points">${team.points}</div>
+                <div class="st-form">${renderFormBadge(team.form)}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    console.error('Standings error:', err);
+    return `
+      <div class="standings-container">
+        <div class="standings-header">
+          <h3><i class="fa-solid fa-ranking-star"></i> League Standings</h3>
+        </div>
+        <div class="standings-placeholder">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          <p>Error loading standings data</p>
+        </div>
+      </div>
+    `;
+  }
+}
+
 // Match detail panel logic
 async function openMatchDetails(matchId, rowElement) {
-    const existingDetail = document.querySelector(`.detail-expanded[data-for="${matchId}"]`);
-    if (existingDetail) {
-        existingDetail.remove();
-        rowElement.classList.remove('is-active');
-        return;
+    // 创建或获取模态框
+    let modal = document.getElementById('match-detail-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'match-detail-modal';
+        modal.className = 'match-modal';
+        document.body.appendChild(modal);
     }
 
-    document.querySelectorAll('.detail-expanded').forEach(el => el.remove());
-    document.querySelectorAll('.match-row, .result-item, .fixture-match-card').forEach(r => r.classList.remove('is-active'));
-
-    rowElement.classList.add('is-active');
-
-    const detailContainer = document.createElement('div');
-    detailContainer.className = 'detail-expanded';
-    detailContainer.dataset.for = matchId;
-    detailContainer.innerHTML = `
-        <div class="inline-loader">
-            <div class="loading-spinner"></div>
-            <p>Loading match details...</p>
+    modal.innerHTML = `
+        <div class="match-modal-overlay"></div>
+        <div class="match-modal-content">
+            <button class="modal-close-btn">
+                <i class="fa-solid fa-times"></i>
+            </button>
+            <div class="modal-body">
+                <div class="inline-loader">
+                    <div class="loading-spinner"></div>
+                    <p>Loading match details...</p>
+                </div>
+            </div>
         </div>
     `;
-    
-    rowElement.after(detailContainer);
 
-    setTimeout(() => {
-        rowElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    // 关闭按钮事件
+    const closeBtn = modal.querySelector('.modal-close-btn');
+    const overlay = modal.querySelector('.match-modal-overlay');
+    
+    const closeModal = () => {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    };
+    
+    closeBtn.onclick = closeModal;
+    overlay.onclick = closeModal;
+
+    const modalBody = modal.querySelector('.modal-body');
 
     try {
         const result = await Promise.race([
@@ -726,12 +1334,12 @@ async function openMatchDetails(matchId, rowElement) {
         const match = extractMatch(result);
 
         if (!match) {
-            detailContainer.innerHTML = `
+            modalBody.innerHTML = `
                 <div class="error-message">
                     <i class="fa-solid fa-exclamation-triangle"></i>
                     <h3>No Data Available</h3>
                     <p>Unable to load match details</p>
-                    <button class="retry-btn" onclick="openMatchDetails(${matchId}, this.closest('.detail-expanded').previousElementSibling)">
+                    <button class="retry-btn" onclick="openMatchDetails(${matchId}, null)">
                         <i class="fa-solid fa-refresh"></i> Retry
                     </button>
                 </div>
@@ -784,8 +1392,7 @@ async function openMatchDetails(matchId, rowElement) {
             contentHtml = renderSummary(match);
         }
 
-        detailContainer.innerHTML = `
-          <div class="inline-detail-content">
+        modalBody.innerHTML = `
             <div class="match-header-inline">
                 <div class="teams-score">
                     <div class="team-info">
@@ -806,20 +1413,19 @@ async function openMatchDetails(matchId, rowElement) {
             <div class="detail-body" id="inline-content-${matchId}">
                ${contentHtml}
             </div>
-          </div>
         `;
 
         // Bind main tab events
-        detailContainer.querySelectorAll('.d-tab').forEach(btn => {
+        modalBody.querySelectorAll('.d-tab').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const target = btn.dataset.target;
                 const contentEl = document.getElementById(`inline-content-${matchId}`);
                 
-                detailContainer.querySelectorAll('.d-tab').forEach(b => b.classList.remove('active'));
+                modalBody.querySelectorAll('.d-tab').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 
-                const subTabs = detailContainer.querySelector('.detail-sub-tabs');
+                const subTabs = modalBody.querySelector('.detail-sub-tabs');
                 if (target === 'match' && isFinishedMatch) {
                     if (subTabs) subTabs.style.display = 'block';
                 } else {
@@ -828,7 +1434,7 @@ async function openMatchDetails(matchId, rowElement) {
                 
                 contentEl.innerHTML = '<div class="tab-loading"><div class="loading-spinner"></div></div>';
                 
-                setTimeout(() => {
+                setTimeout(async () => {
                     if (target === "match") {
                         if (isScheduledMatch) contentEl.innerHTML = renderScheduledContent(match);
                         else if (isLiveMatch) contentEl.innerHTML = renderLiveContent(match);
@@ -836,9 +1442,20 @@ async function openMatchDetails(matchId, rowElement) {
                     } else if (target === "odds") {
                         contentEl.innerHTML = renderComingSoon("Odds data will be available soon");
                     } else if (target === "h2h") {
-                        contentEl.innerHTML = renderComingSoon("Head-to-head data coming soon");
+                        contentEl.innerHTML = await renderH2H(match);
+                        // Bind H2H tab events
+                        contentEl.querySelectorAll('.h2h-tab').forEach(tab => {
+                            tab.addEventListener('click', () => {
+                                contentEl.querySelectorAll('.h2h-tab').forEach(t => t.classList.remove('active'));
+                                tab.classList.add('active');
+                                const section = tab.dataset.section;
+                                contentEl.querySelectorAll('.h2h-section').forEach(s => {
+                                    s.classList.toggle('active', s.dataset.section === section);
+                                });
+                            });
+                        });
                     } else if (target === "standings") {
-                        contentEl.innerHTML = renderComingSoon("Standings data coming soon");
+                        contentEl.innerHTML = await renderStandings(match);
                     }
                 }, 100);
             });
@@ -846,13 +1463,13 @@ async function openMatchDetails(matchId, rowElement) {
 
         // Bind sub-tab events for finished matches
         if (isFinishedMatch) {
-            detailContainer.querySelectorAll('.d-sub-tab').forEach(btn => {
+            modalBody.querySelectorAll('.d-sub-tab').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const target = btn.dataset.target;
                     const contentEl = document.getElementById(`inline-content-${matchId}`);
                     
-                    detailContainer.querySelectorAll('.d-sub-tab').forEach(b => b.classList.remove('active'));
+                    modalBody.querySelectorAll('.d-sub-tab').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     
                     contentEl.innerHTML = '<div class="tab-loading"><div class="loading-spinner"></div></div>';
@@ -860,7 +1477,63 @@ async function openMatchDetails(matchId, rowElement) {
                     setTimeout(() => {
                         if (target === "summary") contentEl.innerHTML = renderSummary(match);
                         else if (target === "stats") contentEl.innerHTML = renderStats(match);
-                        else if (target === "lineups") contentEl.innerHTML = renderLineups(match);
+                        else if (target === "lineups") {
+                            contentEl.innerHTML = renderLineups(match);
+                            
+                            // Bind lineup view toggle buttons
+                            contentEl.querySelectorAll('.lineup-view-btn').forEach(viewBtn => {
+                                viewBtn.addEventListener('click', () => {
+                                    const view = viewBtn.dataset.view;
+                                    
+                                    // Update button states
+                                    contentEl.querySelectorAll('.lineup-view-btn').forEach(b => b.classList.remove('active'));
+                                    viewBtn.classList.add('active');
+                                    
+                                    // Update view content
+                                    contentEl.querySelectorAll('.lineup-view-content').forEach(v => {
+                                        v.classList.toggle('active', v.dataset.view === view);
+                                    });
+                                });
+                            });
+                        }
+                    }, 100);
+                });
+            });
+        }
+
+        // Bind Live Events period tabs for live matches
+        if (isLiveMatch) {
+            modalBody.querySelectorAll('.live-event-tab').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const period = btn.dataset.period;
+                    const eventsContent = modalBody.querySelector('.live-events-content');
+                    
+                    modalBody.querySelectorAll('.live-event-tab').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    eventsContent.innerHTML = '<div class="tab-loading"><div class="loading-spinner"></div></div>';
+                    
+                    setTimeout(() => {
+                        eventsContent.innerHTML = renderSummary(match, period);
+                    }, 100);
+                });
+            });
+            
+            // Bind Live Stats period tabs for live matches
+            modalBody.querySelectorAll('.stats-period-tab').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const period = btn.dataset.period;
+                    const statsContent = modalBody.querySelector('.stats-content');
+                    
+                    modalBody.querySelectorAll('.stats-period-tab').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    statsContent.innerHTML = '<div class="tab-loading"><div class="loading-spinner"></div></div>';
+                    
+                    setTimeout(() => {
+                        statsContent.innerHTML = renderStats(match, period);
                     }, 100);
                 });
             });
@@ -868,12 +1541,12 @@ async function openMatchDetails(matchId, rowElement) {
 
     } catch (err) {
         console.error('Match detail error:', err);
-        detailContainer.innerHTML = `
+        modalBody.innerHTML = `
             <div class="error-message">
                 <i class="fa-solid fa-wifi"></i>
                 <h3>Connection Error</h3>
                 <p>Please check your connection and try again</p>
-                <button class="retry-btn" onclick="openMatchDetails(${matchId}, this.closest('.detail-expanded').previousElementSibling)">
+                <button class="retry-btn" onclick="openMatchDetails(${matchId}, null)">
                     <i class="fa-solid fa-refresh"></i> Retry
                 </button>
             </div>
@@ -989,15 +1662,17 @@ function renderLiveContent(match) {
                 </div>
             </div>
             
-            <div class="watch-live-section">
-                <a href="https://xoigac.tv/" target="_blank" class="watch-live-btn">
-                    <i class="fa-solid fa-play"></i>
-                    WATCH LIVE
-                </a>
-            </div>
-            
             <div class="live-stats-section">
-                <h3><i class="fa-solid fa-chart-bar"></i> Live Stats</h3>
+                <div class="live-stats-header-row">
+                    <div class="live-stats-title">
+                        <i class="fa-solid fa-chart-bar"></i>
+                        <h3>LIVE STATS</h3>
+                    </div>
+                    <a href="https://xoigac.tv/" target="_blank" class="watch-live-btn">
+                        <i class="fa-solid fa-play"></i>
+                        WATCH LIVE
+                    </a>
+                </div>
                 <div class="stats-period-tabs">
                     <button class="stats-period-tab active" data-period="match">MATCH</button>
                     <button class="stats-period-tab" data-period="1st">1ST HALF</button>
@@ -1191,6 +1866,7 @@ function bindEvents() {
     // Match row click
     const row = e.target.closest(".match-row");
     if (row) {
+      // 忽略操作按钮区域的点击
       if (e.target.closest(".match-actions")) return;
       const matchId = Number(row.dataset.fixtureId);
       if (!matchId) return;

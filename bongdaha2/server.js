@@ -238,6 +238,19 @@ app.get("/api/fixture-events", async (req, res) => {
   }
 });
 
+// Head to Head
+app.get("/api/h2h", async (req, res) => {
+  try {
+    const { h2h } = req.query;
+    if (!h2h) return res.json([]);
+    const r = await axios.get(`${BASE_URL}/fixtures/headtohead`, { headers, params: { h2h, last: 10 } });
+    res.json(r.data?.response || []);
+  } catch (err) {
+    console.error("h2h error:", err.message);
+    res.json([]);
+  }
+});
+
 // listen
 app.listen(PORT, () => {
   console.log("Bongdaha Server Running");

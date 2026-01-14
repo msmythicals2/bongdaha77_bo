@@ -1322,7 +1322,7 @@ if (!id) return;
     const oddsBtn = e.target.closest("[data-action='open-odds']");
     if (oddsBtn) {
       e.stopPropagation();
-      window.open("https://www.ab77-vip.com", "_blank");
+      window.open("www.google.com", "_blank");
       return;
     }
 
