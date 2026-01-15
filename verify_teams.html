@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Team IDs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .team-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .team-card.error {
+            border-left: 4px solid #dc3545;
+        }
+        .team-card.warning {
+            border-left: 4px solid #ffc107;
+        }
+        .team-card.success {
+            border-left: 4px solid #28a745;
+        }
+        .team-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .team-logo {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+        }
+        .team-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        .team-info {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .team-id {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .mismatch {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-stats {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Team ID Verification Tool</h1>
+    
+    <div class="controls">
+        <button id="verifyBtn" onclick="verifyAllTeams()">Verify All Teams</button>
+        <button onclick="verifyBatch(0, 10)">Verify First 10</button>
+        <button onclick="verifyVietnameseTeams()">Verify Vietnamese Teams Only</button>
+        <div id="status"></div>
+    </div>
+
+    <div id="summary" class="summary" style="display: none;">
+        <h2>Summary</h2>
+        <div class="summary-stats">
+            <div class="stat">
+                <div class="stat-value" id="totalTeams">0</div>
+                <div class="stat-label">Total Teams</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="successCount" style="color: #28a745;">0</div>
+                <div class="stat-label">Verified</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="warningCount" style="color: #ffc107;">0</div>
+                <div class="stat-label">Warnings</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="errorCount" style="color: #dc3545;">0</div>
+                <div class="stat-label">Errors</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="results" class="results"></div>
+
+    <script>
+        const POPULAR_TEAMS = [
+            { id: 33, name: "Manchester United", country: "England" },
+            { id: 40, name: "Liverpool", country: "England" },
+            { id: 529, name: "Barcelona", country: "Spain" },
+            { id: 541, name: "Real Madrid", country: "Spain" },
+            { id: 50, name: "Manchester City", country: "England" },
+            { id: 42, name: "Arsenal", country: "England" },
+            { id: 49, name: "Chelsea", country: "England" },
+            { id: 85, name: "Paris Saint Germain", country: "France" },
+            { id: 157, name: "Bayern Munich", country: "Germany" },
+            { id: 496, name: "Juventus", country: "Italy" },
+            { id: 47, name: "Tottenham", country: "England" },
+            { id: 489, name: "AC Milan", country: "Italy" },
+            { id: 492, name: "Napoli", country: "Italy" },
+            { id: 165, name: "Borussia Dortmund", country: "Germany" },
+            { id: 81, name: "Marseille", country: "France" },
+            { id: 548, name: "Atletico Madrid", country: "Spain" },
+            { id: 530, name: "Sevilla", country: "Spain" },
+            { id: 532, name: "Valencia", country: "Spain" },
+            { id: 497, name: "AS Roma", country: "Italy" },
+            { id: 487, name: "Lazio", country: "Italy" },
+            { id: 505, name: "Inter", country: "Italy" },
+            { id: 173, name: "RB Leipzig", country: "Germany" },
+            { id: 168, name: "Bayer Leverkusen", country: "Germany" },
+            { id: 79, name: "Lille", country: "France" },
+            { id: 80, name: "Lyon", country: "France" },
+            { id: 83, name: "Monaco", country: "France" },
+            { id: 34, name: "Newcastle", country: "England" },
+            { id: 66, name: "Aston Villa", country: "England" },
+            { id: 48, name: "West Ham", country: "England" },
+            { id: 35, name: "Bournemouth", country: "England" },
+            { id: 39, name: "Wolves", country: "England" },
+            { id: 45, name: "Everton", country: "England" },
+            { id: 36, name: "Fulham", country: "England" },
+            { id: 51, name: "Brighton", country: "England" },
+            { id: 543, name: "Real Betis", country: "Spain" },
+            { id: 727, name: "Atalanta", country: "Italy" },
+            { id: 499, name: "Fiorentina", country: "Italy" },
+            { id: 169, name: "Eintracht Frankfurt", country: "Germany" },
+            { id: 172, name: "VfB Stuttgart", country: "Germany" },
+            { id: 2939, name: "Al-Nassr FC", country: "Saudi Arabia" },
+            { id: 2931, name: "Al-Hilal", country: "Saudi Arabia" },
+            { id: 2932, name: "Al-Ittihad", country: "Saudi Arabia" },
+            { id: 1604, name: "Inter Miami CF", country: "USA" },
+            { id: 1613, name: "LA Galaxy", country: "USA" },
+            { id: 228, name: "Flamengo", country: "Brazil" },
+            { id: 121, name: "Palmeiras", country: "Brazil" },
+            { id: 131, name: "Boca Juniors", country: "Argentina" },
+            { id: 435, name: "River Plate", country: "Argentina" },
+            { id: 2274, name: "Hanoi FC", country: "Vietnam" },
+            { id: 2277, name: "Viettel FC", country: "Vietnam" }
+        ];
+
+        function showStatus(message, type = 'loading') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = type;
+            status.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+
+        async function verifyTeams(teams) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            
+            const summaryDiv = document.getElementById('summary');
+            summaryDiv.style.display = 'block';
+
+            let successCount = 0;
+            let warningCount = 0;
+            let errorCount = 0;
+
+            showStatus(`Verifying ${teams.length} teams...`, 'loading');
+            document.getElementById('verifyBtn').disabled = true;
+
+            // Process in batches of 5 to avoid rate limiting
+            const batchSize = 5;
+            for (let i = 0; i < teams.length; i += batchSize) {
+                const batch = teams.slice(i, i + batchSize);
+                const ids = batch.map(t => t.id).join(',');
+                
+                try {
+                    const response = await fetch(`/api/teams/verify-ids?ids=${ids}`);
+                    const data = await response.json();
+                    
+                    if (data.results) {
+                        data.results.forEach((result, idx) => {
+                            const expected = batch[idx];
+                            const card = createTeamCard(result, expected);
+                            resultsDiv.appendChild(card);
+
+                            if (result.error) {
+                                errorCount++;
+                            } else if (isTeamMismatch(result, expected)) {
+                                warningCount++;
+                            } else {
+                                successCount++;
+                            }
+                        });
+                    }
+                    
+                    showStatus(`Verified ${Math.min(i + batchSize, teams.length)} of ${teams.length} teams...`, 'loading');
+                    
+                    // Wait between batches
+                    if (i + batchSize < teams.length) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (err) {
+                    console.error('Batch error:', err);
+                    errorCount += batch.length;
+                }
+            }
+
+            document.getElementById('totalTeams').textContent = teams.length;
+            document.getElementById('successCount').textContent = successCount;
+            document.getElementById('warningCount').textContent = warningCount;
+            document.getElementById('errorCount').textContent = errorCount;
+
+            showStatus(`✅ Verification complete! ${successCount} verified, ${warningCount} warnings, ${errorCount} errors`, 'success');
+            document.getElementById('verifyBtn').disabled = false;
+        }
+
+        function isTeamMismatch(actual, expected) {
+            if (actual.error) return false;
+            
+            // Check if name matches (case insensitive, flexible matching)
+            const actualName = actual.name.toLowerCase();
+            const expectedName = expected.name.toLowerCase();
+            
+            // Check if country matches
+            const actualCountry = actual.country.toLowerCase();
+            const expectedCountry = expected.country.toLowerCase();
+            
+            return !actualName.includes(expectedName.split(' ')[0].toLowerCase()) || 
+                   actualCountry !== expectedCountry;
+        }
+
+        function createTeamCard(actual, expected) {
+            const card = document.createElement('div');
+            card.className = 'team-card';
+            
+            if (actual.error) {
+                card.classList.add('error');
+                card.innerHTML = `
+                    <div class="team-header">
+                        <div class="team-name">❌ ${expected.name}</div>
+                    </div>
+                    <div class="team-info">
+                        <div><span class="team-id">ID: ${expected.id}</span></div>
+                        <div class="mismatch">Error: ${actual.error}</div>
+                        <div>Expected: ${expected.country}</div>
+                    </div>
+                `;
+            } else {
+                const isMismatch = isTeamMismatch(actual, expected);
+                card.classList.add(isMismatch ? 'warning' : 'success');
+                
+                card.innerHTML = `
+                    <div class="team-header">
+                        <img src="${actual.logo}" alt="${actual.name}" class="team-logo" onerror="this.style.display='none'">
+                        <div class="team-name">${isMismatch ? '⚠️' : '✅'} ${actual.name}</div>
+                    </div>
+                    <div class="team-info">
+                        <div><span class="team-id">ID: ${actual.id}</span></div>
+                        <div><strong>Country:</strong> ${actual.country} ${actual.country.toLowerCase() !== expected.country.toLowerCase() ? '<span class="mismatch">(Expected: ' + expected.country + ')</span>' : ''}</div>
+                        <div><strong>Expected Name:</strong> ${expected.name} ${actual.name !== expected.name ? '<span class="mismatch">(Mismatch!)</span>' : ''}</div>
+                        <div><strong>City:</strong> ${actual.city}</div>
+                        <div><strong>Venue:</strong> ${actual.venue}</div>
+                        <div><strong>Founded:</strong> ${actual.founded}</div>
+                    </div>
+                `;
+            }
+            
+            return card;
+        }
+
+        async function verifyAllTeams() {
+            await verifyTeams(POPULAR_TEAMS);
+        }
+
+        async function verifyBatch(start, count) {
+            const batch = POPULAR_TEAMS.slice(start, start + count);
+            await verifyTeams(batch);
+        }
+
+        async function verifyVietnameseTeams() {
+            const vietnameseTeams = POPULAR_TEAMS.filter(t => t.country === 'Vietnam');
+            await verifyTeams(vietnameseTeams);
+        }
+    </script>
+</body>
+</html>

@@ -39,7 +39,73 @@ const state = {
   lastFixtures: [],
   lastLive: [],
   selectedLeagueId: null,
+  pinnedTeams: new Set(JSON.parse(localStorage.getItem("pinnedTeams") || "[]")),
 };
+
+// Migrate old team IDs to new correct IDs
+function migrateTeamIDs() {
+  const ID_MIGRATIONS = {
+    2274: 3670, // Hanoi FC: Trans Narva (Estonia) -> Ha Noi (Vietnam)
+    2277: 3681, // Viettel FC: Birkirkara (Malta) -> Viettel (Vietnam)
+    2931: 2932, // Al-Hilal: Al-Fateh -> Al-Hilal Saudi FC
+    2932: 2938, // Al-Ittihad: Al-Hilal -> Al-Ittihad FC
+    1604: 9568, // Inter Miami: NYC FC -> Inter Miami
+    1613: 1605, // LA Galaxy: Columbus Crew -> LA Galaxy
+    228: 127,   // Flamengo: Sporting CP -> Flamengo
+    131: 451    // Boca Juniors: Corinthians -> Boca Juniors
+  };
+
+  try {
+    // Migrate pinnedTeams Set
+    const pinnedTeamsArray = JSON.parse(localStorage.getItem("pinnedTeams") || "[]");
+    const migratedPinnedTeams = pinnedTeamsArray.map(id => ID_MIGRATIONS[id] || id);
+    localStorage.setItem("pinnedTeams", JSON.stringify(migratedPinnedTeams));
+    state.pinnedTeams = new Set(migratedPinnedTeams);
+
+    // Migrate pinnedTeamsData object
+    const pinnedTeamsData = JSON.parse(localStorage.getItem("pinnedTeamsData") || "{}");
+    const migratedData = {};
+    
+    Object.entries(pinnedTeamsData).forEach(([oldId, teamData]) => {
+      const oldIdNum = parseInt(oldId);
+      const newId = ID_MIGRATIONS[oldIdNum] || oldIdNum;
+      
+      // Update team data with new ID
+      migratedData[newId] = {
+        ...teamData,
+        id: newId
+      };
+      
+      // Update team name if it was one of the corrected teams
+      if (oldIdNum === 2274) {
+        migratedData[newId].name = "Ha Noi";
+      } else if (oldIdNum === 2277) {
+        migratedData[newId].name = "Viettel";
+      } else if (oldIdNum === 2931) {
+        migratedData[newId].name = "Al-Hilal";
+      } else if (oldIdNum === 2932) {
+        migratedData[newId].name = "Al-Ittihad";
+      } else if (oldIdNum === 1604) {
+        migratedData[newId].name = "Inter Miami CF";
+      } else if (oldIdNum === 1613) {
+        migratedData[newId].name = "LA Galaxy";
+      } else if (oldIdNum === 228) {
+        migratedData[newId].name = "Flamengo";
+      } else if (oldIdNum === 131) {
+        migratedData[newId].name = "Boca Juniors";
+      }
+    });
+    
+    localStorage.setItem("pinnedTeamsData", JSON.stringify(migratedData));
+    
+    console.log("Team IDs migrated successfully");
+  } catch (err) {
+    console.error("Error migrating team IDs:", err);
+  }
+}
+
+// Run migration on page load
+migrateTeamIDs();
 
 let __REFRESHING__ = false;
 const __CACHE__ = new Map();
@@ -127,6 +193,60 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+// Get country code from country name for flag display
+function getCountryCode(countryName) {
+  if (!countryName) return null;
+  
+  const countryMap = {
+    'England': 'gb-eng', 'Spain': 'es', 'France': 'fr', 'Germany': 'de', 'Italy': 'it',
+    'Portugal': 'pt', 'Brazil': 'br', 'Argentina': 'ar', 'Netherlands': 'nl', 'Belgium': 'be',
+    'Croatia': 'hr', 'Denmark': 'dk', 'Sweden': 'se', 'Norway': 'no', 'Poland': 'pl',
+    'Switzerland': 'ch', 'Austria': 'at', 'Czech Republic': 'cz', 'Serbia': 'rs', 
+    'Turkey': 'tr', 'Türkiye': 'tr', // Turkish name for Turkey
+    'Uruguay': 'uy', 'Colombia': 'co', 'Chile': 'cl', 'Mexico': 'mx', 'USA': 'us',
+    'Canada': 'ca', 'Japan': 'jp', 'South Korea': 'kr', 'Australia': 'au', 'Morocco': 'ma',
+    'Senegal': 'sn', 'Nigeria': 'ng', 'Ghana': 'gh', 'Cameroon': 'cm', 'Ivory Coast': 'ci',
+    'Egypt': 'eg', 'Algeria': 'dz', 'Tunisia': 'tn', 'Mali': 'ml', 'Burkina Faso': 'bf',
+    'Scotland': 'gb-sct', 'Wales': 'gb-wls', 'Northern Ireland': 'gb-nir', 'Ireland': 'ie',
+    'Greece': 'gr', 'Romania': 'ro', 'Bulgaria': 'bg', 'Ukraine': 'ua', 'Russia': 'ru',
+    'Slovakia': 'sk', 'Hungary': 'hu', 'Slovenia': 'si', 'Bosnia and Herzegovina': 'ba',
+    'Albania': 'al', 'North Macedonia': 'mk', 'Montenegro': 'me', 'Kosovo': 'xk',
+    'Iceland': 'is', 'Finland': 'fi', 'Estonia': 'ee', 'Latvia': 'lv', 'Lithuania': 'lt',
+    'Paraguay': 'py', 'Peru': 'pe', 'Ecuador': 'ec', 'Venezuela': 've', 'Bolivia': 'bo',
+    'Costa Rica': 'cr', 'Panama': 'pa', 'Jamaica': 'jm', 'Honduras': 'hn', 'El Salvador': 'sv',
+    'China': 'cn', 'Iran': 'ir', 'Saudi Arabia': 'sa', 'Qatar': 'qa', 'UAE': 'ae',
+    'Iraq': 'iq', 'Uzbekistan': 'uz', 'Thailand': 'th', 'Vietnam': 'vn', 'Indonesia': 'id',
+    'South Africa': 'za', 'DR Congo': 'cd', 'Guinea': 'gn', 'Gabon': 'ga', 'Angola': 'ao',
+    'Cameroun': 'cm', 'Côte d\'Ivoire': 'ci', 'Cape Verde': 'cv', 'Comoros': 'km',
+    'New Zealand': 'nz', 'India': 'in', 'Bangladesh': 'bd', 'Pakistan': 'pk',
+    'Afghanistan': 'af', 'Philippines': 'ph', 'Malaysia': 'my', 'Singapore': 'sg',
+    'Israel': 'il', 'Palestine': 'ps', 'Jordan': 'jo', 'Lebanon': 'lb', 'Syria': 'sy',
+    'Kuwait': 'kw', 'Bahrain': 'bh', 'Oman': 'om', 'Yemen': 'ye',
+    'Kazakhstan': 'kz', 'Kyrgyzstan': 'kg', 'Tajikistan': 'tj', 'Turkmenistan': 'tm',
+    'Armenia': 'am', 'Azerbaijan': 'az', 'Georgia': 'ge', 'Belarus': 'by', 'Moldova': 'md',
+    'Luxembourg': 'lu', 'Monaco': 'mc', 'Liechtenstein': 'li', 'San Marino': 'sm',
+    'Andorra': 'ad', 'Malta': 'mt', 'Cyprus': 'cy',
+    'Togo': 'tg', 'Benin': 'bj', 'Niger': 'ne', 'Chad': 'td', 'CAR': 'cf',
+    'Equatorial Guinea': 'gq', 'Sao Tome and Principe': 'st', 'Mauritania': 'mr',
+    'Gambia': 'gm', 'Sierra Leone': 'sl', 'Liberia': 'lr', 'Guinea-Bissau': 'gw',
+    'Zimbabwe': 'zw', 'Zambia': 'zm', 'Mozambique': 'mz', 'Malawi': 'mw',
+    'Botswana': 'bw', 'Namibia': 'na', 'Lesotho': 'ls', 'Eswatini': 'sz',
+    'Madagascar': 'mg', 'Mauritius': 'mu', 'Seychelles': 'sc', 'Reunion': 're',
+    'Kenya': 'ke', 'Uganda': 'ug', 'Tanzania': 'tz', 'Rwanda': 'rw', 'Burundi': 'bi',
+    'Ethiopia': 'et', 'Eritrea': 'er', 'Djibouti': 'dj', 'Somalia': 'so', 'Sudan': 'sd',
+    'South Sudan': 'ss', 'Libya': 'ly'
+  };
+  
+  // Check if country is in map
+  if (countryMap[countryName]) {
+    return countryMap[countryName];
+  }
+  
+  // Fallback: try to get first 2 letters as country code
+  const code = countryName.toLowerCase().replace(/\s+/g, '').substring(0, 2);
+  return code.length === 2 ? code : null;
 }
 
 function extractMatch(result) {
@@ -1396,16 +1516,44 @@ async function openMatchDetails(matchId, rowElement) {
             <div class="match-header-inline">
                 <div class="teams-score">
                     <div class="team-info">
-                        <img src="${match.teams.home.logo}" class="team-logo-md">
-                        <span class="team-name">${escapeHtml(match.teams.home.name)}</span>
+                        <i class="fa-regular fa-star team-favorite-star" 
+                           data-team-id="${match.teams.home.id}" 
+                           data-team-name="${escapeHtml(match.teams.home.name)}" 
+                           data-team-logo="${match.teams.home.logo}"
+                           data-team-country="${escapeHtml(match.league.country || '')}"
+                           title="Add to My Favorite Teams"></i>
+                        <img src="${match.teams.home.logo}" class="team-logo-md clickable-team-logo" 
+                             data-team-id="${match.teams.home.id}" 
+                             data-team-name="${escapeHtml(match.teams.home.name)}" 
+                             data-team-logo="${match.teams.home.logo}"
+                             data-team-country="${escapeHtml(match.league.country || '')}">
+                        <span class="team-name clickable-team-name" 
+                              data-team-id="${match.teams.home.id}" 
+                              data-team-name="${escapeHtml(match.teams.home.name)}" 
+                              data-team-logo="${match.teams.home.logo}"
+                              data-team-country="${escapeHtml(match.league.country || '')}">${escapeHtml(match.teams.home.name)}</span>
                     </div>
                     <div class="score-display">
                         ${match.goals.home !== null ? `${match.goals.home} - ${match.goals.away}` : 'VS'}
                         <div class="match-status">${match.fixture.status.long}</div>
                     </div>
                     <div class="team-info">
-                        <img src="${match.teams.away.logo}" class="team-logo-md">
-                        <span class="team-name">${escapeHtml(match.teams.away.name)}</span>
+                        <span class="team-name clickable-team-name" 
+                              data-team-id="${match.teams.away.id}" 
+                              data-team-name="${escapeHtml(match.teams.away.name)}" 
+                              data-team-logo="${match.teams.away.logo}"
+                              data-team-country="${escapeHtml(match.league.country || '')}">${escapeHtml(match.teams.away.name)}</span>
+                        <img src="${match.teams.away.logo}" class="team-logo-md clickable-team-logo" 
+                             data-team-id="${match.teams.away.id}" 
+                             data-team-name="${escapeHtml(match.teams.away.name)}" 
+                             data-team-logo="${match.teams.away.logo}"
+                             data-team-country="${escapeHtml(match.league.country || '')}">
+                        <i class="fa-regular fa-star team-favorite-star" 
+                           data-team-id="${match.teams.away.id}" 
+                           data-team-name="${escapeHtml(match.teams.away.name)}" 
+                           data-team-logo="${match.teams.away.logo}"
+                           data-team-country="${escapeHtml(match.league.country || '')}"
+                           title="Add to My Favorite Teams"></i>
                     </div>
                 </div>
             </div>
@@ -1538,6 +1686,63 @@ async function openMatchDetails(matchId, rowElement) {
                 });
             });
         }
+
+        // Add event listeners for clickable team names and logos
+        modalBody.querySelectorAll('.clickable-team-name, .clickable-team-logo').forEach(el => {
+            el.addEventListener('click', () => {
+                const teamId = parseInt(el.dataset.teamId);
+                const teamName = el.dataset.teamName;
+                const teamLogo = el.dataset.teamLogo;
+                const teamCountry = el.dataset.teamCountry;
+                
+                closeModal(); // Close match detail modal first
+                showTeamDetails({ id: teamId, name: teamName, logo: teamLogo, country: teamCountry });
+            });
+        });
+
+        // Add event listeners for favorite stars
+        modalBody.querySelectorAll('.team-favorite-star').forEach(star => {
+            const teamId = parseInt(star.dataset.teamId);
+            const teamName = star.dataset.teamName;
+            const teamLogo = star.dataset.teamLogo;
+            const teamCountry = star.dataset.teamCountry;
+            
+            // Check if team is already pinned
+            const pinnedTeamsData = JSON.parse(localStorage.getItem('pinnedTeamsData') || '{}');
+            if (pinnedTeamsData[teamId]) {
+                star.classList.remove('fa-regular');
+                star.classList.add('fa-solid');
+            }
+            
+            star.addEventListener('click', () => {
+                const pinnedTeamsData = JSON.parse(localStorage.getItem('pinnedTeamsData') || '{}');
+                
+                if (pinnedTeamsData[teamId]) {
+                    // Unpin team
+                    delete pinnedTeamsData[teamId];
+                    state.pinnedTeams.delete(teamId);
+                    star.classList.remove('fa-solid');
+                    star.classList.add('fa-regular');
+                    star.title = 'Add to My Favorite Teams';
+                } else {
+                    // Pin team
+                    pinnedTeamsData[teamId] = { id: teamId, name: teamName, logo: teamLogo, country: teamCountry };
+                    state.pinnedTeams.add(teamId);
+                    star.classList.remove('fa-regular');
+                    star.classList.add('fa-solid');
+                    star.title = 'Remove from My Favorite Teams';
+                }
+                
+                // Update both localStorage keys
+                localStorage.setItem('pinnedTeamsData', JSON.stringify(pinnedTeamsData));
+                localStorage.setItem('pinnedTeams', JSON.stringify([...state.pinnedTeams]));
+                
+                // Refresh pinned teams display
+                if (typeof renderPinnedTeams === 'function') {
+                    renderPinnedTeams();
+                }
+            });
+        });
 
     } catch (err) {
         console.error('Match detail error:', err);
@@ -1900,3 +2105,1302 @@ setInterval(() => {
     }
   });
 }, 15000);
+
+// ========== MY TEAMS FUNCTIONALITY ==========
+
+// Default popular teams (for display only, not auto-pinned)
+const POPULAR_TEAMS = [
+  { id: 33, name: "Manchester United", logo: "https://media.api-sports.io/football/teams/33.png", country: "England" },
+  { id: 40, name: "Liverpool", logo: "https://media.api-sports.io/football/teams/40.png", country: "England" },
+  { id: 529, name: "Barcelona", logo: "https://media.api-sports.io/football/teams/529.png", country: "Spain" },
+  { id: 541, name: "Real Madrid", logo: "https://media.api-sports.io/football/teams/541.png", country: "Spain" },
+  { id: 50, name: "Manchester City", logo: "https://media.api-sports.io/football/teams/50.png", country: "England" },
+  { id: 42, name: "Arsenal", logo: "https://media.api-sports.io/football/teams/42.png", country: "England" },
+  { id: 49, name: "Chelsea", logo: "https://media.api-sports.io/football/teams/49.png", country: "England" },
+  { id: 85, name: "Paris Saint Germain", logo: "https://media.api-sports.io/football/teams/85.png", country: "France" },
+  { id: 157, name: "Bayern Munich", logo: "https://media.api-sports.io/football/teams/157.png", country: "Germany" },
+  { id: 496, name: "Juventus", logo: "https://media.api-sports.io/football/teams/496.png", country: "Italy" },
+  { id: 47, name: "Tottenham", logo: "https://media.api-sports.io/football/teams/47.png", country: "England" },
+  { id: 489, name: "AC Milan", logo: "https://media.api-sports.io/football/teams/489.png", country: "Italy" },
+  { id: 492, name: "Napoli", logo: "https://media.api-sports.io/football/teams/492.png", country: "Italy" },
+  { id: 165, name: "Borussia Dortmund", logo: "https://media.api-sports.io/football/teams/165.png", country: "Germany" },
+  { id: 81, name: "Marseille", logo: "https://media.api-sports.io/football/teams/81.png", country: "France" },
+  { id: 548, name: "Atletico Madrid", logo: "https://media.api-sports.io/football/teams/548.png", country: "Spain" },
+  { id: 530, name: "Sevilla", logo: "https://media.api-sports.io/football/teams/530.png", country: "Spain" },
+  { id: 532, name: "Valencia", logo: "https://media.api-sports.io/football/teams/532.png", country: "Spain" },
+  { id: 497, name: "AS Roma", logo: "https://media.api-sports.io/football/teams/497.png", country: "Italy" },
+  { id: 487, name: "Lazio", logo: "https://media.api-sports.io/football/teams/487.png", country: "Italy" },
+  { id: 505, name: "Inter", logo: "https://media.api-sports.io/football/teams/505.png", country: "Italy" },
+  { id: 173, name: "RB Leipzig", logo: "https://media.api-sports.io/football/teams/173.png", country: "Germany" },
+  { id: 168, name: "Bayer Leverkusen", logo: "https://media.api-sports.io/football/teams/168.png", country: "Germany" },
+  { id: 79, name: "Lille", logo: "https://media.api-sports.io/football/teams/79.png", country: "France" },
+  { id: 80, name: "Lyon", logo: "https://media.api-sports.io/football/teams/80.png", country: "France" },
+  { id: 83, name: "Monaco", logo: "https://media.api-sports.io/football/teams/83.png", country: "France" },
+  { id: 34, name: "Newcastle", logo: "https://media.api-sports.io/football/teams/34.png", country: "England" },
+  { id: 66, name: "Aston Villa", logo: "https://media.api-sports.io/football/teams/66.png", country: "England" },
+  { id: 48, name: "West Ham", logo: "https://media.api-sports.io/football/teams/48.png", country: "England" },
+  { id: 35, name: "Bournemouth", logo: "https://media.api-sports.io/football/teams/35.png", country: "England" },
+  { id: 39, name: "Wolves", logo: "https://media.api-sports.io/football/teams/39.png", country: "England" },
+  { id: 45, name: "Everton", logo: "https://media.api-sports.io/football/teams/45.png", country: "England" },
+  { id: 36, name: "Fulham", logo: "https://media.api-sports.io/football/teams/36.png", country: "England" },
+  { id: 51, name: "Brighton", logo: "https://media.api-sports.io/football/teams/51.png", country: "England" },
+  { id: 543, name: "Real Betis", logo: "https://media.api-sports.io/football/teams/543.png", country: "Spain" },
+  { id: 727, name: "Atalanta", logo: "https://media.api-sports.io/football/teams/727.png", country: "Italy" },
+  { id: 499, name: "Fiorentina", logo: "https://media.api-sports.io/football/teams/499.png", country: "Italy" },
+  { id: 169, name: "Eintracht Frankfurt", logo: "https://media.api-sports.io/football/teams/169.png", country: "Germany" },
+  { id: 172, name: "VfB Stuttgart", logo: "https://media.api-sports.io/football/teams/172.png", country: "Germany" },
+  // Saudi Pro League
+  { id: 2939, name: "Al-Nassr FC", logo: "https://media.api-sports.io/football/teams/2939.png", country: "Saudi Arabia" },
+  { id: 2932, name: "Al-Hilal", logo: "https://media.api-sports.io/football/teams/2932.png", country: "Saudi Arabia" },
+  { id: 2938, name: "Al-Ittihad", logo: "https://media.api-sports.io/football/teams/2938.png", country: "Saudi Arabia" },
+  // MLS
+  { id: 9568, name: "Inter Miami CF", logo: "https://media.api-sports.io/football/teams/9568.png", country: "USA" },
+  { id: 1605, name: "LA Galaxy", logo: "https://media.api-sports.io/football/teams/1605.png", country: "USA" },
+  // Other leagues
+  { id: 127, name: "Flamengo", logo: "https://media.api-sports.io/football/teams/127.png", country: "Brazil" },
+  { id: 121, name: "Palmeiras", logo: "https://media.api-sports.io/football/teams/121.png", country: "Brazil" },
+  { id: 451, name: "Boca Juniors", logo: "https://media.api-sports.io/football/teams/451.png", country: "Argentina" },
+  { id: 435, name: "River Plate", logo: "https://media.api-sports.io/football/teams/435.png", country: "Argentina" },
+  { id: 3670, name: "Ha Noi", logo: "https://media.api-sports.io/football/teams/3670.png", country: "Vietnam" },
+  { id: 3681, name: "Viettel", logo: "https://media.api-sports.io/football/teams/3681.png", country: "Vietnam" }
+];
+
+// All searchable teams cache
+let allTeamsCache = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Search history
+const MAX_SEARCH_HISTORY = 5;
+
+function getSearchHistory() {
+  return JSON.parse(localStorage.getItem("teamSearchHistory") || "[]");
+}
+
+function addToSearchHistory(team) {
+  let history = getSearchHistory();
+  
+  // Remove if already exists
+  history = history.filter(t => t.id !== team.id);
+  
+  // Add to beginning
+  history.unshift(team);
+  
+  // Keep only last MAX_SEARCH_HISTORY items
+  history = history.slice(0, MAX_SEARCH_HISTORY);
+  
+  localStorage.setItem("teamSearchHistory", JSON.stringify(history));
+}
+
+// Render pinned teams
+function renderPinnedTeams() {
+  const container = document.getElementById("pinned-teams");
+  if (!container) return;
+  
+  if (state.pinnedTeams.size === 0) {
+    container.innerHTML = '<div class="text-[10px] text-gray-700 px-2 italic">No pinned teams</div>';
+    return;
+  }
+  
+  // Get team details from localStorage
+  const pinnedTeamsData = JSON.parse(localStorage.getItem("pinnedTeamsData") || "{}");
+  
+  let html = "";
+  state.pinnedTeams.forEach(teamId => {
+    const team = pinnedTeamsData[teamId];
+    if (team) {
+      html += `
+        <li class="pinned-team-item" data-team-id="${team.id}" style="cursor: pointer;">
+          <div class="pinned-team-content">
+            <img src="${team.logo}" class="pinned-team-logo">
+            <div class="pinned-team-info">
+              <span class="pinned-team-name">${escapeHtml(team.name)}</span>
+              <span class="pinned-team-country">${escapeHtml(team.country || 'Unknown')}</span>
+            </div>
+          </div>
+          <button class="team-unpin-btn" data-team-id="${team.id}" title="Unpin team">
+            <i class="fa-solid fa-star"></i>
+          </button>
+        </li>
+      `;
+    }
+  });
+  
+  container.innerHTML = html;
+  
+  // Bind click events to open team details
+  container.querySelectorAll('.pinned-team-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      // Don't open if clicking the unpin button
+      if (e.target.closest('.team-unpin-btn')) return;
+      
+      const teamId = parseInt(item.dataset.teamId);
+      const team = pinnedTeamsData[teamId];
+      if (team) {
+        showTeamDetails(team);
+      }
+    });
+  });
+  
+  // Bind unpin events
+  container.querySelectorAll('.team-unpin-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const teamId = parseInt(btn.dataset.teamId);
+      state.pinnedTeams.delete(teamId);
+      
+      // Update localStorage
+      const pinnedTeamsData = JSON.parse(localStorage.getItem("pinnedTeamsData") || "{}");
+      delete pinnedTeamsData[teamId];
+      localStorage.setItem("pinnedTeamsData", JSON.stringify(pinnedTeamsData));
+      localStorage.setItem("pinnedTeams", JSON.stringify([...state.pinnedTeams]));
+      
+      renderPinnedTeams();
+    });
+  });
+}
+
+// Search teams from API
+let searchTimeout;
+async function searchTeams(query) {
+  if (query.length < 2) return { teams: [], source: 'none' };
+  
+  try {
+    const queryLower = query.toLowerCase();
+    
+    // Search using real API
+    const response = await fetch(`/api/teams/search?name=${encodeURIComponent(query)}`);
+    const data = await response.json();
+    
+    const apiResults = [];
+    if (data && Array.isArray(data)) {
+      data.forEach(item => {
+        if (item.team && item.team.name.toLowerCase().includes(queryLower)) {
+          apiResults.push({
+            id: item.team.id,
+            name: item.team.name,
+            logo: item.team.logo,
+            country: item.team.country
+          });
+        }
+      });
+    }
+    
+    // Also search in POPULAR_TEAMS
+    const popularResults = POPULAR_TEAMS.filter(team => 
+      team.name.toLowerCase().includes(queryLower)
+    );
+    
+    // Combine results: popular first, then API results
+    const combined = [...popularResults];
+    const popularIds = new Set(popularResults.map(t => t.id));
+    
+    apiResults.forEach(team => {
+      if (!popularIds.has(team.id)) {
+        combined.push(team);
+      }
+    });
+    
+    // Sort results: teams starting with query first, then others
+    combined.sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(queryLower);
+      const bStarts = b.name.toLowerCase().startsWith(queryLower);
+      
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      
+      // If both start with query or both don't, sort alphabetically
+      return a.name.localeCompare(b.name);
+    });
+    
+    return { 
+      teams: combined.slice(0, 30), 
+      source: apiResults.length > 0 ? 'api' : 'popular' 
+    };
+  } catch (err) {
+    console.error('Search teams error:', err);
+    // Fallback to POPULAR_TEAMS
+    const queryLower = query.toLowerCase();
+    const popularResults = POPULAR_TEAMS.filter(team => 
+      team.name.toLowerCase().includes(queryLower)
+    );
+    
+    // Sort fallback results too
+    popularResults.sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(queryLower);
+      const bStarts = b.name.toLowerCase().startsWith(queryLower);
+      
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      
+      return a.name.localeCompare(b.name);
+    });
+    
+    return { teams: popularResults.slice(0, 20), source: 'popular' };
+  }
+}
+
+// Show add team modal
+function showAddTeamModal() {
+  const searchHistory = getSearchHistory();
+  
+  const modal = document.createElement('div');
+  modal.className = 'team-search-modal';
+  modal.innerHTML = `
+    <div class="team-search-content">
+      <div class="team-search-header">
+        <h3><i class="fa-solid fa-magnifying-glass"></i> Search Teams</h3>
+        <button class="team-search-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <div class="team-search-body">
+        <input type="text" class="team-search-input" placeholder="Type to search teams..." autofocus>
+        <div class="team-search-hint">
+          <i class="fa-solid fa-circle-info"></i> Please type at least 2 characters. The results will start displaying here immediately.
+        </div>
+        
+        ${searchHistory.length > 0 ? `
+          <div class="team-search-history">
+            <div class="team-search-section-header">
+              <h4>RECENT SEARCHES</h4>
+              <button class="clear-all-history-btn" title="Clear all search history">
+                <i class="fa-solid fa-trash"></i> Clear All
+              </button>
+            </div>
+            <div class="team-search-results">
+              ${searchHistory.slice(0, 5).map(team => `
+                <div class="team-search-item" data-team-id="${team.id}">
+                  <img src="${team.logo}" class="team-search-logo">
+                  <div class="team-search-info">
+                    <span class="team-search-name">${escapeHtml(team.name)}</span>
+                    <span class="team-search-country">${escapeHtml(team.country)}</span>
+                  </div>
+                  <div class="team-search-actions">
+                    <button class="team-delete-btn" 
+                            data-team-id="${team.id}"
+                            title="Remove from history">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                    <button class="team-star-btn ${state.pinnedTeams.has(team.id) ? 'active' : ''}" 
+                            data-team-id="${team.id}"
+                            data-team-name="${escapeHtml(team.name)}"
+                            data-team-logo="${team.logo}"
+                            data-team-country="${escapeHtml(team.country)}">
+                      <i class="fa-${state.pinnedTeams.has(team.id) ? 'solid' : 'regular'} fa-star"></i>
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <div class="team-search-popular">
+          <h4>MOST POPULAR TEAMS</h4>
+          <div class="team-search-results">
+            ${POPULAR_TEAMS.map(team => `
+              <div class="team-search-item" data-team-id="${team.id}">
+                <img src="${team.logo}" class="team-search-logo">
+                <div class="team-search-info">
+                  <span class="team-search-name">${escapeHtml(team.name)}</span>
+                  <span class="team-search-country">${escapeHtml(team.country)}</span>
+                </div>
+                <button class="team-star-btn ${state.pinnedTeams.has(team.id) ? 'active' : ''}" 
+                        data-team-id="${team.id}"
+                        data-team-name="${escapeHtml(team.name)}"
+                        data-team-logo="${team.logo}"
+                        data-team-country="${escapeHtml(team.country)}">
+                  <i class="fa-${state.pinnedTeams.has(team.id) ? 'solid' : 'regular'} fa-star"></i>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Close modal
+  const closeBtn = modal.querySelector('.team-search-close');
+  closeBtn.addEventListener('click', () => {
+    modal.remove();
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+  
+  // Search functionality
+  const searchInput = modal.querySelector('.team-search-input');
+  const resultsContainer = modal.querySelector('.team-search-results');
+  const popularSection = modal.querySelector('.team-search-popular');
+  
+  searchInput.addEventListener('input', async (e) => {
+    const query = e.target.value.trim();
+    
+    clearTimeout(searchTimeout);
+    
+    // Hide search history when typing
+    const historySection = modal.querySelector('.team-search-history');
+    if (historySection) {
+      historySection.style.display = query.length > 0 ? 'none' : 'block';
+    }
+    
+    // Get or create temp results container
+    const searchResultsSection = modal.querySelector('.team-search-body');
+    let tempResultsContainer = modal.querySelector('.temp-search-results');
+    
+    if (query.length < 2) {
+      // Remove temp results container if it exists
+      if (tempResultsContainer) {
+        tempResultsContainer.remove();
+      }
+      
+      // Show popular teams and history
+      popularSection.style.display = 'block';
+      popularSection.querySelector('h4').textContent = 'MOST POPULAR TEAMS';
+      const popularResults = popularSection.querySelector('.team-search-results');
+      popularResults.innerHTML = POPULAR_TEAMS.map(team => `
+        <div class="team-search-item" data-team-id="${team.id}">
+          <img src="${team.logo}" class="team-search-logo">
+          <div class="team-search-info">
+            <span class="team-search-name">${escapeHtml(team.name)}</span>
+            <span class="team-search-country">${escapeHtml(team.country)}</span>
+          </div>
+          <button class="team-star-btn ${state.pinnedTeams.has(team.id) ? 'active' : ''}" 
+                  data-team-id="${team.id}"
+                  data-team-name="${escapeHtml(team.name)}"
+                  data-team-logo="${team.logo}"
+                  data-team-country="${escapeHtml(team.country)}">
+            <i class="fa-${state.pinnedTeams.has(team.id) ? 'solid' : 'regular'} fa-star"></i>
+          </button>
+        </div>
+      `).join('');
+      bindStarButtons();
+      return;
+    }
+    
+    // Hide popular teams section when searching
+    popularSection.style.display = 'none';
+    
+    // Create temp results container if it doesn't exist
+    if (!tempResultsContainer) {
+      tempResultsContainer = document.createElement('div');
+      tempResultsContainer.className = 'temp-search-results';
+      tempResultsContainer.innerHTML = `
+        <div class="team-search-section-header">
+          <h4>SEARCH RESULTS</h4>
+        </div>
+        <div class="team-search-results"></div>
+      `;
+      searchResultsSection.appendChild(tempResultsContainer);
+    }
+    
+    const tempResults = tempResultsContainer.querySelector('.team-search-results');
+    tempResults.innerHTML = '<div class="team-search-loading"><i class="fa-solid fa-spinner fa-spin"></i> Searching...</div>';
+    
+    searchTimeout = setTimeout(async () => {
+      const result = await searchTeams(query);
+      let teams = result.teams || [];
+      
+      // Filter: prioritize teams that START with the query
+      const queryLower = query.toLowerCase();
+      
+      // Separate teams into two groups: starts with query, and contains query
+      const startsWithQuery = teams.filter(team => 
+        team.name.toLowerCase().startsWith(queryLower)
+      );
+      
+      const containsQuery = teams.filter(team => {
+        const nameLower = team.name.toLowerCase();
+        return nameLower.includes(queryLower) && !nameLower.startsWith(queryLower);
+      });
+      
+      // Combine: teams starting with query first, then others
+      teams = [...startsWithQuery, ...containsQuery];
+      
+      console.log(`Search for "${query}" returned ${teams.length} teams:`, teams.map(t => t.name));
+      console.log(`- Starts with "${query}": ${startsWithQuery.length}`, startsWithQuery.map(t => t.name));
+      console.log(`- Contains "${query}": ${containsQuery.length}`, containsQuery.map(t => t.name));
+      
+      if (teams.length === 0) {
+        tempResults.innerHTML = '<div class="team-search-empty">No teams found. Try a different search term.</div>';
+      } else {
+        tempResults.innerHTML = teams.map(team => `
+          <div class="team-search-item" data-team-id="${team.id}">
+            <img src="${team.logo}" class="team-search-logo">
+            <div class="team-search-info">
+              <span class="team-search-name">${escapeHtml(team.name)}</span>
+              <span class="team-search-country">${escapeHtml(team.country)}</span>
+            </div>
+            <button class="team-star-btn ${state.pinnedTeams.has(team.id) ? 'active' : ''}" 
+                    data-team-id="${team.id}"
+                    data-team-name="${escapeHtml(team.name)}"
+                    data-team-logo="${team.logo}"
+                    data-team-country="${escapeHtml(team.country)}">
+              <i class="fa-${state.pinnedTeams.has(team.id) ? 'solid' : 'regular'} fa-star"></i>
+            </button>
+          </div>
+        `).join('');
+      }
+      
+      bindStarButtons();
+    }, 300); // Reduced debounce to 300ms
+  });
+  
+  // Bind star buttons
+  function bindStarButtons() {
+    // Bind delete history buttons
+    modal.querySelectorAll('.team-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const teamId = parseInt(btn.dataset.teamId);
+        
+        // Remove from search history
+        let searchHistory = JSON.parse(localStorage.getItem('teamSearchHistory') || '[]');
+        searchHistory = searchHistory.filter(t => t.id !== teamId);
+        localStorage.setItem('teamSearchHistory', JSON.stringify(searchHistory));
+        
+        // Update the history section without closing modal
+        const historySection = modal.querySelector('.team-search-history');
+        if (searchHistory.length === 0) {
+          // Remove history section if empty
+          if (historySection) {
+            historySection.remove();
+          }
+        } else {
+          // Update history section
+          const historyResults = historySection.querySelector('.team-search-results');
+          historyResults.innerHTML = searchHistory.slice(0, 5).map(team => `
+            <div class="team-search-item" data-team-id="${team.id}">
+              <img src="${team.logo}" class="team-search-logo">
+              <div class="team-search-info">
+                <span class="team-search-name">${escapeHtml(team.name)}</span>
+                <span class="team-search-country">${escapeHtml(team.country)}</span>
+              </div>
+              <div class="team-search-actions">
+                <button class="team-delete-btn" 
+                        data-team-id="${team.id}"
+                        title="Remove from history">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+                <button class="team-star-btn ${state.pinnedTeams.has(team.id) ? 'active' : ''}" 
+                        data-team-id="${team.id}"
+                        data-team-name="${escapeHtml(team.name)}"
+                        data-team-logo="${team.logo}"
+                        data-team-country="${escapeHtml(team.country)}">
+                  <i class="fa-${state.pinnedTeams.has(team.id) ? 'solid' : 'regular'} fa-star"></i>
+                </button>
+              </div>
+            </div>
+          `).join('');
+          
+          // Re-bind events for new elements
+          bindStarButtons();
+        }
+      });
+    });
+    
+    // Bind clear all history button
+    const clearAllBtn = modal.querySelector('.clear-all-history-btn');
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        localStorage.setItem('teamSearchHistory', '[]');
+        
+        // Remove history section
+        const historySection = modal.querySelector('.team-search-history');
+        if (historySection) {
+          historySection.remove();
+        }
+      });
+    }
+    
+    // Bind star button clicks
+    modal.querySelectorAll('.team-star-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const teamId = parseInt(btn.dataset.teamId);
+        const teamName = btn.dataset.teamName;
+        const teamLogo = btn.dataset.teamLogo;
+        const teamCountry = btn.dataset.teamCountry;
+        
+        // Get existing teams data
+        const pinnedTeamsData = JSON.parse(localStorage.getItem("pinnedTeamsData") || "{}");
+        
+        if (state.pinnedTeams.has(teamId)) {
+          // Unpin
+          state.pinnedTeams.delete(teamId);
+          delete pinnedTeamsData[teamId];
+          btn.classList.remove('active');
+          btn.innerHTML = '<i class="fa-regular fa-star"></i>';
+        } else {
+          // Pin
+          state.pinnedTeams.add(teamId);
+          pinnedTeamsData[teamId] = {
+            id: teamId,
+            name: teamName,
+            logo: teamLogo,
+            country: teamCountry
+          };
+          btn.classList.add('active');
+          btn.innerHTML = '<i class="fa-solid fa-star"></i>';
+          
+          // Add to search history
+          addToSearchHistory({ id: teamId, name: teamName, logo: teamLogo, country: teamCountry });
+        }
+        
+        // Save to localStorage
+        localStorage.setItem("pinnedTeamsData", JSON.stringify(pinnedTeamsData));
+        localStorage.setItem("pinnedTeams", JSON.stringify([...state.pinnedTeams]));
+        renderPinnedTeams();
+      });
+    });
+    
+    // Bind team item clicks to open details
+    modal.querySelectorAll('.team-search-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        // Don't open if clicking the star button
+        if (e.target.closest('.team-star-btn')) return;
+        
+        const teamId = parseInt(item.dataset.teamId);
+        const teamName = item.querySelector('.team-search-name').textContent;
+        const teamLogo = item.querySelector('.team-search-logo').src;
+        const teamCountry = item.querySelector('.team-search-country').textContent;
+        
+        // Add to search history
+        addToSearchHistory({ id: teamId, name: teamName, logo: teamLogo, country: teamCountry });
+        
+        // Close search modal
+        modal.remove();
+        
+        // Open team details
+        showTeamDetails({ id: teamId, name: teamName, logo: teamLogo, country: teamCountry });
+      });
+    });
+  }
+  
+  bindStarButtons();
+}
+
+// Initialize MY TEAMS
+document.addEventListener('DOMContentLoaded', () => {
+  renderPinnedTeams();
+  
+  const addTeamBtn = document.getElementById('add-team-btn');
+  if (addTeamBtn) {
+    addTeamBtn.addEventListener('click', showAddTeamModal);
+  }
+});
+
+
+// Show team details modal
+function showTeamDetails(team) {
+  const modal = document.createElement('div');
+  modal.className = 'team-details-modal';
+  modal.innerHTML = `
+    <div class="team-details-content">
+      <div class="team-details-header">
+        <div class="team-details-title">
+          <img src="${team.logo}" class="team-details-logo">
+          <div class="team-details-info">
+            <h2>${escapeHtml(team.name)}</h2>
+            <p>${escapeHtml(team.country)}</p>
+          </div>
+        </div>
+        <button class="team-details-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <div class="team-details-tabs">
+        <button class="team-details-tab active" data-tab="fixtures">Fixtures</button>
+        <button class="team-details-tab" data-tab="results">Recent Result</button>
+        <button class="team-details-tab" data-tab="standings">Standings</button>
+        <button class="team-details-tab" data-tab="players">Players</button>
+        <button class="team-details-tab" data-tab="details">Details</button>
+      </div>
+      
+      <div class="team-details-body">
+        <div class="team-details-loading">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <div>Loading team information...</div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Close modal
+  const closeBtn = modal.querySelector('.team-details-close');
+  closeBtn.addEventListener('click', () => {
+    modal.remove();
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+  
+  // Tab switching
+  const tabs = modal.querySelectorAll('.team-details-tab');
+  const bodyContainer = modal.querySelector('.team-details-body');
+  
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      const tabName = tab.dataset.tab;
+      loadTeamTab(team, tabName, bodyContainer);
+    });
+  });
+  
+  // Load initial tab
+  loadTeamTab(team, 'fixtures', bodyContainer);
+}
+
+// Load team tab content
+async function loadTeamTab(team, tabName, container) {
+  container.innerHTML = `
+    <div class="team-details-loading">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <div>Loading ${tabName}...</div>
+    </div>
+  `;
+  
+  try {
+    switch(tabName) {
+      case 'fixtures':
+        await renderTeamFixtures(team, container);
+        break;
+      case 'results':
+        await renderTeamResults(team, container);
+        break;
+      case 'standings':
+        await renderTeamStandings(team, container);
+        break;
+      case 'players':
+        await renderTeamPlayers(team, container);
+        break;
+      case 'details':
+        await renderTeamDetailsInfo(team, container);
+        break;
+    }
+  } catch (err) {
+    console.error('Error loading team tab:', err);
+    container.innerHTML = `
+      <div class="team-details-loading">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <div>Failed to load ${tabName}. Please try again.</div>
+      </div>
+    `;
+  }
+}
+
+// Render team fixtures (upcoming matches)
+async function renderTeamFixtures(team, container) {
+  try {
+    console.log('Loading fixtures for team:', team.id, team.name);
+    const response = await fetch(`/api/teams/${team.id}/fixtures`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Fixtures data received:', data);
+    
+    const fixtures = data.fixtures || [];
+    const upcoming = fixtures.filter(f => f.fixture.status.short === 'NS' || f.fixture.status.short === 'TBD').slice(0, 20);
+    
+    if (upcoming.length === 0) {
+      container.innerHTML = '<div class="team-details-loading"><div>No upcoming fixtures available</div></div>';
+      return;
+    }
+    
+    // Group by league
+    const byLeague = {};
+    upcoming.forEach(f => {
+      const leagueName = f.league.name;
+      if (!byLeague[leagueName]) {
+        byLeague[leagueName] = [];
+      }
+      byLeague[leagueName].push(f);
+    });
+    
+    let html = '';
+    Object.entries(byLeague).forEach(([leagueName, matches]) => {
+      html += `
+        <div class="fixtures-league-group">
+          <div class="fixtures-league-header">
+            <img src="${matches[0].league.logo}" style="width: 20px; height: 20px; object-fit: contain; margin-right: 8px;">
+            <span>${escapeHtml(leagueName)}</span>
+          </div>
+          ${matches.map(f => {
+            const date = new Date(f.fixture.date);
+            const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+            const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            
+            return `
+              <div class="fixture-card">
+                <div class="fixture-date-time">
+                  <div class="fixture-date">${dateStr}</div>
+                  <div class="fixture-time">${timeStr}</div>
+                </div>
+                <div class="fixture-match">
+                  <div class="fixture-team">
+                    <img src="${f.teams.home.logo}" alt="${f.teams.home.name}">
+                    <span>${escapeHtml(f.teams.home.name)}</span>
+                  </div>
+                  <div class="fixture-vs">-</div>
+                  <div class="fixture-team">
+                    <img src="${f.teams.away.logo}" alt="${f.teams.away.name}">
+                    <span>${escapeHtml(f.teams.away.name)}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    });
+    
+    container.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading team fixtures:', err);
+    container.innerHTML = '<div class="team-details-loading"><div>Failed to load fixtures</div></div>';
+  }
+}
+
+// Render team results (finished matches)
+async function renderTeamResults(team, container) {
+  try {
+    console.log('Loading results for team:', team.id, team.name);
+    const response = await fetch(`/api/teams/${team.id}/fixtures`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const fixtures = data.fixtures || [];
+    const results = fixtures.filter(f => f.fixture.status.short === 'FT').slice(0, 20);
+    
+    if (results.length === 0) {
+      container.innerHTML = '<div class="team-details-loading"><div>No recent results available</div></div>';
+      return;
+    }
+    
+    // Group by league
+    const byLeague = {};
+    results.forEach(f => {
+      const leagueName = f.league.name;
+      if (!byLeague[leagueName]) {
+        byLeague[leagueName] = [];
+      }
+      byLeague[leagueName].push(f);
+    });
+    
+    let html = '';
+    Object.entries(byLeague).forEach(([leagueName, matches]) => {
+      html += `
+        <div class="fixtures-league-group">
+          <div class="fixtures-league-header">
+            <img src="${matches[0].league.logo}" style="width: 20px; height: 20px; object-fit: contain; margin-right: 8px;">
+            <span>${escapeHtml(leagueName)}</span>
+          </div>
+          ${matches.map(f => {
+            const date = new Date(f.fixture.date);
+            const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            
+            return `
+              <div class="fixture-card">
+                <div class="fixture-date-time">
+                  <div class="fixture-date">${dateStr}</div>
+                </div>
+                <div class="fixture-match">
+                  <div class="fixture-team">
+                    <img src="${f.teams.home.logo}" alt="${f.teams.home.name}">
+                    <span>${escapeHtml(f.teams.home.name)}</span>
+                  </div>
+                  <div class="fixture-score">${f.goals.home} - ${f.goals.away}</div>
+                  <div class="fixture-team">
+                    <img src="${f.teams.away.logo}" alt="${f.teams.away.name}">
+                    <span>${escapeHtml(f.teams.away.name)}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    });
+    
+    container.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading team results:', err);
+    container.innerHTML = '<div class="team-details-loading"><div>Failed to load results</div></div>';
+  }
+}
+
+// Render team summary (fixtures and results) - DEPRECATED, keeping for compatibility
+async function renderTeamSummary(team, container) {
+  await renderTeamFixtures(team, container);
+}
+
+// Render team standings
+async function renderTeamStandings(team, container) {
+  try {
+    const response = await fetch(`/api/teams/${team.id}/standings`);
+    const data = await response.json();
+    
+    if (!data.standings || data.standings.length === 0) {
+      container.innerHTML = '<div class="team-details-loading"><div>No standings available</div></div>';
+      return;
+    }
+    
+    // Store standings data globally for tab switching
+    window.currentStandingsData = data.standings;
+    window.currentTeamId = team.id;
+    
+    // Create league dropdown and tabs
+    const leagueOptions = data.standings.map((standing, index) => 
+      `<option value="${index}">${escapeHtml(standing.league.name)} - ${standing.league.season}</option>`
+    ).join('');
+    
+    let html = `
+      <div class="standings-controls">
+        <select class="standings-league-select" onchange="updateStandingsLeague(this.value)">
+          ${leagueOptions}
+        </select>
+        
+        <div class="standings-tabs">
+          <button class="standings-tab active" data-type="all" onclick="updateStandingsType('all', this)">OVERALL</button>
+          <button class="standings-tab" data-type="home" onclick="updateStandingsType('home', this)">HOME</button>
+          <button class="standings-tab" data-type="away" onclick="updateStandingsType('away', this)">AWAY</button>
+        </div>
+      </div>
+      
+      <div id="standings-content"></div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Render first league by default
+    renderStandingsTable(0, 'all');
+    
+  } catch (err) {
+    console.error('Error loading team standings:', err);
+    container.innerHTML = '<div class="team-details-loading"><div>Failed to load standings</div></div>';
+  }
+}
+
+// Render standings table for selected league and type
+function renderStandingsTable(leagueIndex, type) {
+  const standing = window.currentStandingsData[leagueIndex];
+  let leagueStandings = standing.league.standings[0];
+  const teamId = window.currentTeamId;
+  
+  // Create a copy and recalculate points and ranking based on type
+  leagueStandings = leagueStandings.map(s => {
+    const stats = type === 'all' ? s.all : (type === 'home' ? s.home : s.away);
+    // Calculate points based on selected type
+    const points = (stats.win * 3) + stats.draw;
+    // Calculate goal difference
+    const goalsDiff = stats.goals.for - stats.goals.against;
+    
+    return {
+      ...s,
+      displayPoints: points,
+      displayGoalsDiff: goalsDiff,
+      displayStats: stats
+    };
+  });
+  
+  // Sort by points, then goal difference, then goals scored
+  leagueStandings.sort((a, b) => {
+    if (b.displayPoints !== a.displayPoints) {
+      return b.displayPoints - a.displayPoints;
+    }
+    if (b.displayGoalsDiff !== a.displayGoalsDiff) {
+      return b.displayGoalsDiff - a.displayGoalsDiff;
+    }
+    return b.displayStats.goals.for - a.displayStats.goals.for;
+  });
+  
+  const contentDiv = document.getElementById('standings-content');
+  
+  const html = `
+    <div class="standings-container">
+      <div class="standings-table-wrapper">
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th class="standings-rank">#</th>
+              <th class="standings-team">TEAM</th>
+              <th>MP</th>
+              <th>W</th>
+              <th>D</th>
+              <th>L</th>
+              <th>G</th>
+              <th>GD</th>
+              <th>PTS</th>
+              <th>FORM</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${leagueStandings.map((s, index) => {
+              const stats = s.displayStats;
+              const rank = index + 1;
+              
+              // Determine row color based on rank position
+              let rankClass = '';
+              if (rank <= 4) {
+                rankClass = 'rank-champions';
+              } else if (rank <= 6) {
+                rankClass = 'rank-europa';
+              } else if (rank >= leagueStandings.length - 2) {
+                rankClass = 'rank-relegation';
+              }
+              
+              const isCurrentTeam = s.team.id === teamId;
+              
+              return `
+                <tr class="${rankClass} ${isCurrentTeam ? 'current-team' : ''}">
+                  <td class="standings-rank">
+                    <div class="rank-badge ${rankClass}">${rank}</div>
+                  </td>
+                  <td class="standings-team">
+                    <div class="team-cell">
+                      <img src="${s.team.logo}" alt="${s.team.name}">
+                      <span>${escapeHtml(s.team.name)}</span>
+                    </div>
+                  </td>
+                  <td>${stats.played}</td>
+                  <td>${stats.win}</td>
+                  <td>${stats.draw}</td>
+                  <td>${stats.lose}</td>
+                  <td>${stats.goals.for}:${stats.goals.against}</td>
+                  <td>${s.displayGoalsDiff > 0 ? '+' : ''}${s.displayGoalsDiff}</td>
+                  <td class="standings-points">${s.displayPoints}</td>
+                  <td class="standings-form">
+                    ${s.form ? s.form.split('').slice(-5).map(f => {
+                      if (f === 'W') return '<span class="form-badge form-win">W</span>';
+                      if (f === 'D') return '<span class="form-badge form-draw">D</span>';
+                      if (f === 'L') return '<span class="form-badge form-loss">L</span>';
+                      return '<span class="form-badge form-unknown">?</span>';
+                    }).join('') : '<span class="form-badge form-unknown">?</span>'}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="standings-legend">
+        <div class="legend-item">
+          <span class="legend-color rank-champions"></span>
+          <span>Promotion - Champions League (League phase)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color rank-europa"></span>
+          <span>Promotion - Europa League (League phase)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color rank-relegation"></span>
+          <span>Relegation - Championship</span>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  contentDiv.innerHTML = html;
+}
+
+// Update standings when league is changed
+function updateStandingsLeague(leagueIndex) {
+  const activeTab = document.querySelector('.standings-tab.active');
+  const type = activeTab ? activeTab.dataset.type : 'all';
+  renderStandingsTable(parseInt(leagueIndex), type);
+}
+
+// Update standings when type is changed
+function updateStandingsType(type, button) {
+  // Update active tab
+  document.querySelectorAll('.standings-tab').forEach(tab => tab.classList.remove('active'));
+  button.classList.add('active');
+  
+  // Get current league index
+  const leagueSelect = document.querySelector('.standings-league-select');
+  const leagueIndex = parseInt(leagueSelect.value);
+  
+  renderStandingsTable(leagueIndex, type);
+}
+
+// Render team players
+async function renderTeamPlayers(team, container) {
+  try {
+    const response = await fetch(`/api/teams/${team.id}/players`);
+    const data = await response.json();
+    
+    console.log('Players data received:', data);
+    
+    if (!data.players || data.players.length === 0) {
+      container.innerHTML = '<div class="team-details-loading"><div>No players available</div></div>';
+      return;
+    }
+    
+    const players = data.players;
+    console.log('Total players:', players.length);
+    
+    // Log first player to see full structure
+    if (players.length > 0) {
+      console.log('First player FULL DATA:', JSON.stringify(players[0], null, 2));
+    }
+    
+    // Check if position is in statistics instead
+    const firstPlayerStats = players[0]?.statistics?.[0];
+    console.log('First player statistics:', firstPlayerStats);
+    console.log('Position in statistics?:', firstPlayerStats?.games?.position);
+    
+    // Map positions to standard names
+    const positionGroups = {
+      'Goalkeepers': [],
+      'Defenders': [],
+      'Midfielders': [],
+      'Attackers': []
+    };
+    
+    players.forEach(p => {
+      // Try to get position from statistics.games.position
+      const pos = p.statistics?.[0]?.games?.position || p.player?.position || '';
+      
+      // Also try common position name variations
+      const posLower = pos.toLowerCase();
+      
+      if (posLower.includes('goalkeeper') || pos === 'Goalkeeper') {
+        positionGroups['Goalkeepers'].push(p);
+      } else if (posLower.includes('defender') || pos === 'Defender') {
+        positionGroups['Defenders'].push(p);
+      } else if (posLower.includes('midfielder') || pos === 'Midfielder') {
+        positionGroups['Midfielders'].push(p);
+      } else if (posLower.includes('attacker') || posLower.includes('forward') || pos === 'Attacker') {
+        positionGroups['Attackers'].push(p);
+      } else {
+        // If no position match, log it
+        console.log(`Unknown position for ${p.player?.name}: "${pos}"`);
+      }
+    });
+    
+    console.log('Position groups:', {
+      Goalkeepers: positionGroups['Goalkeepers'].length,
+      Defenders: positionGroups['Defenders'].length,
+      Midfielders: positionGroups['Midfielders'].length,
+      Attackers: positionGroups['Attackers'].length
+    });
+    
+    let html = '<div class="players-content">';
+    
+    // Render each position group
+    Object.entries(positionGroups).forEach(([position, playersList]) => {
+      if (playersList.length > 0) {
+        html += `
+          <div class="players-section">
+            <h3>${position}</h3>
+            <table class="players-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Age</th>
+                  <th><img src="/images/icons/football-jersey.svg" alt="Jersey" style="width: 20px; height: 20px;"></th>
+                  <th><img src="/images/icons/goal.svg" alt="Goals" style="width: 20px; height: 20px;"></th>
+                  <th><img src="/images/icons/football-assist.svg" alt="Assists" style="width: 20px; height: 20px;"></th>
+                  <th><img src="/images/icons/yellow-card.svg" alt="Yellow Cards" style="width: 14px; height: 18px;"></th>
+                  <th><img src="/images/icons/red-card.svg" alt="Red Cards" style="width: 14px; height: 18px;"></th>
+                </tr>
+              </thead>
+              <tbody>`;
+        
+        playersList.forEach(p => {
+          try {
+            // Try to find statistics with jersey number
+            let stats = null;
+            if (p.statistics && p.statistics.length > 0) {
+              // First, try to find a stat with a jersey number
+              stats = p.statistics.find(s => s.games && s.games.number) || p.statistics[0];
+            } else {
+              stats = {};
+            }
+            
+            const games = stats.games || {};
+            const goals = stats.goals || {};
+            const cards = stats.cards || {};
+            const playerName = p.player.name || 'Unknown';
+            const playerNationality = p.player.nationality || '';
+            
+            // Try to get jersey number from multiple sources
+            let jerseyNumber = games.number || p.player.number || '-';
+            
+            // Debug: log if no number found
+            if (jerseyNumber === '-') {
+              console.log(`No jersey number for ${playerName}:`, {
+                'games.number': games.number,
+                'player.number': p.player.number,
+                'all statistics': p.statistics?.map(s => ({ league: s.league?.name, number: s.games?.number }))
+              });
+            }
+            
+            // Get country flag URL (using flagcdn.com API)
+            const countryCode = getCountryCode(playerNationality);
+            const flagUrl = countryCode ? `https://flagcdn.com/w40/${countryCode}.png` : '';
+            
+            // Debug: log if no flag
+            if (!flagUrl && playerNationality) {
+              console.log(`No flag for nationality: "${playerNationality}"`);
+            }
+            
+            html += `
+              <tr>
+                <td>
+                  <div class="player-name-cell">
+                    <img src="${p.player.photo}" class="player-photo" onerror="this.src='https://via.placeholder.com/32'">
+                    ${flagUrl ? `<img src="${flagUrl}" class="player-flag" alt="${playerNationality}" onerror="this.style.display='none'">` : ''}
+                    <span>${playerName}</span>
+                  </div>
+                </td>
+                <td>${p.player.age || '-'}</td>
+                <td><strong>${jerseyNumber}</strong></td>
+                <td>${goals.total || 0}</td>
+                <td>${goals.assists || 0}</td>
+                <td>${cards.yellow || 0}</td>
+                <td>${cards.red || 0}</td>
+              </tr>
+            `;
+          } catch (playerErr) {
+            console.error('Error rendering player:', playerErr);
+          }
+        });
+        
+        html += `
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+    });
+    
+    // Add coach section
+    html += `
+      <div class="players-section">
+        <h3>Coach</h3>
+        <div class="coach-info">
+          <div class="coach-loading">Loading coach information...</div>
+        </div>
+      </div>
+    `;
+    
+    html += '</div>';
+    
+    console.log('Setting players HTML, length:', html.length);
+    container.innerHTML = html;
+    
+    // Fetch and display coach info
+    try {
+      const coachResponse = await fetch(`/api/teams/${team.id}/info`);
+      const coachData = await coachResponse.json();
+      
+      const coachDiv = container.querySelector('.coach-info');
+      if (coachData.team && coachData.team.coach) {
+        const coach = coachData.team.coach;
+        coachDiv.innerHTML = `
+          <div class="coach-card">
+            <img src="${coach.photo}" class="coach-photo" onerror="this.src='https://via.placeholder.com/64'">
+            <div class="coach-details">
+              <div class="coach-name">${coach.name || 'Unknown'}</div>
+              <div class="coach-meta">
+                <span>${coach.nationality || 'Unknown'}</span>
+                ${coach.age ? `<span> • ${coach.age} years old</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        coachDiv.innerHTML = '<div class="coach-loading">No coach information available</div>';
+      }
+    } catch (coachErr) {
+      console.error('Error loading coach:', coachErr);
+    }
+    
+    console.log('Players HTML set successfully');
+  } catch (err) {
+    console.error('Error loading team players:', err);
+    container.innerHTML = '<div class="team-details-loading"><div>Failed to load players: ' + err.message + '</div></div>';
+  }
+}
+
+// Render team details info
+async function renderTeamDetailsInfo(team, container) {
+  try {
+    const response = await fetch(`/api/teams/${team.id}/info`);
+    const data = await response.json();
+    
+    const teamInfo = data.team || {};
+    const venue = teamInfo.venue || {};
+    
+    let html = `
+      <div class="team-info-grid">
+        <div class="team-info-card">
+          <h4>Team Info</h4>
+          <div class="team-info-row">
+            <span class="team-info-label">Founded</span>
+            <span class="team-info-value">${teamInfo.founded || 'Unknown'}</span>
+          </div>
+          <div class="team-info-row">
+            <span class="team-info-label">Country</span>
+            <span class="team-info-value">${escapeHtml(teamInfo.country || 'Unknown')}</span>
+          </div>
+          <div class="team-info-row">
+            <span class="team-info-label">National</span>
+            <span class="team-info-value">${teamInfo.national ? 'Yes' : 'No'}</span>
+          </div>
+        </div>
+        
+        <div class="team-info-card">
+          <h4>Venue</h4>
+          <div class="team-info-row">
+            <span class="team-info-label">Name</span>
+            <span class="team-info-value">${escapeHtml(venue.name || 'Unknown')}</span>
+          </div>
+          <div class="team-info-row">
+            <span class="team-info-label">City</span>
+            <span class="team-info-value">${escapeHtml(venue.city || 'Unknown')}</span>
+          </div>
+          <div class="team-info-row">
+            <span class="team-info-label">Capacity</span>
+            <span class="team-info-value">${venue.capacity ? venue.capacity.toLocaleString() : 'Unknown'}</span>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add venue image if available
+    if (venue.image) {
+      html += `
+        <div style="margin-top: 20px;">
+          <img src="${venue.image}" style="width: 100%; border-radius: 8px; max-height: 400px; object-fit: cover;">
+        </div>
+      `;
+    }
+    
+    container.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading team details:', err);
+    container.innerHTML = '<div class="team-details-loading"><div>Failed to load team details</div></div>';
+  }
+}

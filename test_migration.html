@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Team ID Migration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.danger {
+            background: #f44336;
+        }
+        button.danger:hover {
+            background: #da190b;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Team ID Migration Test</h1>
+    
+    <div class="section">
+        <h2>Current LocalStorage Data</h2>
+        <button onclick="showCurrentData()">Show Current Data</button>
+        <button onclick="clearAllData()" class="danger">Clear All Data</button>
+        <div id="currentData"></div>
+    </div>
+
+    <div class="section">
+        <h2>Add Test Data (Old IDs)</h2>
+        <p>This will add teams with OLD incorrect IDs to test the migration</p>
+        <button onclick="addOldTestData()">Add Old Test Data</button>
+        <div id="testDataStatus"></div>
+    </div>
+
+    <div class="section">
+        <h2>Run Migration</h2>
+        <p>This will migrate old team IDs to new correct IDs</p>
+        <button onclick="runMigration()">Run Migration</button>
+        <div id="migrationStatus"></div>
+    </div>
+
+    <div class="section">
+        <h2>After Migration Data</h2>
+        <button onclick="showAfterMigration()">Show After Migration</button>
+        <div id="afterData"></div>
+    </div>
+
+    <script>
+        const ID_MIGRATIONS = {
+            2274: 3670, // Hanoi FC
+            2277: 3681, // Viettel FC
+            2931: 2932, // Al-Hilal
+            2932: 2938, // Al-Ittihad
+            1604: 9568, // Inter Miami
+            1613: 1605, // LA Galaxy
+            228: 127,   // Flamengo
+            131: 451    // Boca Juniors
+        };
+
+        function showCurrentData() {
+            const pinnedTeams = localStorage.getItem("pinnedTeams");
+            const pinnedTeamsData = localStorage.getItem("pinnedTeamsData");
+            
+            const html = `
+                <h3>pinnedTeams:</h3>
+                <pre>${pinnedTeams || 'null'}</pre>
+                <h3>pinnedTeamsData:</h3>
+                <pre>${JSON.stringify(JSON.parse(pinnedTeamsData || '{}'), null, 2)}</pre>
+            `;
+            
+            document.getElementById('currentData').innerHTML = html;
+        }
+
+        function clearAllData() {
+            if (confirm('Are you sure you want to clear all pinned teams data?')) {
+                localStorage.removeItem("pinnedTeams");
+                localStorage.removeItem("pinnedTeamsData");
+                document.getElementById('currentData').innerHTML = '<div class="status success">All data cleared!</div>';
+            }
+        }
+
+        function addOldTestData() {
+            // Add old incorrect IDs
+            const oldPinnedTeams = [2274, 2277, 1604];
+            const oldPinnedTeamsData = {
+                2274: {
+                    id: 2274,
+                    name: "Hanoi FC",
+                    logo: "https://media.api-sports.io/football/teams/2274.png",
+                    country: "Vietnam"
+                },
+                2277: {
+                    id: 2277,
+                    name: "Viettel FC",
+                    logo: "https://media.api-sports.io/football/teams/2277.png",
+                    country: "Vietnam"
+                },
+                1604: {
+                    id: 1604,
+                    name: "Inter Miami CF",
+                    logo: "https://media.api-sports.io/football/teams/1604.png",
+                    country: "USA"
+                }
+            };
+
+            localStorage.setItem("pinnedTeams", JSON.stringify(oldPinnedTeams));
+            localStorage.setItem("pinnedTeamsData", JSON.stringify(oldPinnedTeamsData));
+
+            document.getElementById('testDataStatus').innerHTML = '<div class="status success">Old test data added! Click "Show Current Data" to see it.</div>';
+        }
+
+        function runMigration() {
+            try {
+                // Migrate pinnedTeams Set
+                const pinnedTeamsArray = JSON.parse(localStorage.getItem("pinnedTeams") || "[]");
+                const migratedPinnedTeams = pinnedTeamsArray.map(id => ID_MIGRATIONS[id] || id);
+                localStorage.setItem("pinnedTeams", JSON.stringify(migratedPinnedTeams));
+
+                // Migrate pinnedTeamsData object
+                const pinnedTeamsData = JSON.parse(localStorage.getItem("pinnedTeamsData") || "{}");
+                const migratedData = {};
+                
+                Object.entries(pinnedTeamsData).forEach(([oldId, teamData]) => {
+                    const oldIdNum = parseInt(oldId);
+                    const newId = ID_MIGRATIONS[oldIdNum] || oldIdNum;
+                    
+                    // Update team data with new ID
+                    migratedData[newId] = {
+                        ...teamData,
+                        id: newId
+                    };
+                    
+                    // Update team name if it was one of the corrected teams
+                    if (oldIdNum === 2274) {
+                        migratedData[newId].name = "Ha Noi";
+                    } else if (oldIdNum === 2277) {
+                        migratedData[newId].name = "Viettel";
+                    } else if (oldIdNum === 1604) {
+                        migratedData[newId].name = "Inter Miami CF";
+                    }
+                });
+                
+                localStorage.setItem("pinnedTeamsData", JSON.stringify(migratedData));
+                
+                document.getElementById('migrationStatus').innerHTML = '<div class="status success">Migration completed successfully!</div>';
+            } catch (err) {
+                document.getElementById('migrationStatus').innerHTML = `<div class="status error">Migration failed: ${err.message}</div>`;
+            }
+        }
+
+        function showAfterMigration() {
+            const pinnedTeams = localStorage.getItem("pinnedTeams");
+            const pinnedTeamsData = localStorage.getItem("pinnedTeamsData");
+            
+            const html = `
+                <h3>pinnedTeams (After Migration):</h3>
+                <pre>${pinnedTeams || 'null'}</pre>
+                <h3>pinnedTeamsData (After Migration):</h3>
+                <pre>${JSON.stringify(JSON.parse(pinnedTeamsData || '{}'), null, 2)}</pre>
+            `;
+            
+            document.getElementById('afterData').innerHTML = html;
+        }
+
+        // Auto-show current data on load
+        window.onload = () => {
+            showCurrentData();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Vietnamese Teams</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 4px;
+        }
+        .results {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .team-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .team-logo {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+        .team-info {
+            flex: 1;
+        }
+        .team-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        .team-id {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .team-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🇻🇳 Find Vietnamese Football Teams</h1>
+    
+    <div class="controls">
+        <button onclick="searchTeam('Hanoi')">Search Hanoi</button>
+        <button onclick="searchTeam('Viettel')">Search Viettel</button>
+        <button onclick="searchTeam('Vietnam')">Search Vietnam</button>
+        <button onclick="searchTeam('Saigon')">Search Saigon</button>
+        <button onclick="searchTeam('HAGL')">Search HAGL</button>
+        <div id="status" style="display: none;"></div>
+    </div>
+
+    <div id="results" class="results"></div>
+
+    <script>
+        function showStatus(message) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.display = 'block';
+        }
+
+        async function searchTeam(query) {
+            showStatus(`Searching for "${query}"...`);
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Loading...</p>';
+
+            try {
+                const response = await fetch(`/api/teams/search?name=${encodeURIComponent(query)}`);
+                const teams = await response.json();
+
+                if (!teams || teams.length === 0) {
+                    resultsDiv.innerHTML = '<p>No teams found.</p>';
+                    showStatus(`No results for "${query}"`);
+                    return;
+                }
+
+                let html = `<h2>Found ${teams.length} team(s) for "${query}"</h2>`;
+                
+                teams.forEach(item => {
+                    const team = item.team;
+                    const venue = item.venue;
+                    
+                    html += `
+                        <div class="team-item">
+                            <img src="${team.logo}" alt="${team.name}" class="team-logo" onerror="this.style.display='none'">
+                            <div class="team-info">
+                                <div class="team-name">${team.name}</div>
+                                <div class="team-id">ID: ${team.id}</div>
+                                <div class="team-details">
+                                    <strong>Country:</strong> ${team.country || 'N/A'} | 
+                                    <strong>Founded:</strong> ${team.founded || 'N/A'} | 
+                                    <strong>National:</strong> ${team.national ? 'Yes' : 'No'}
+                                </div>
+                                ${venue.name ? `<div class="team-details"><strong>Venue:</strong> ${venue.name}, ${venue.city || 'N/A'}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '<h3>Raw JSON Response:</h3><pre>' + JSON.stringify(teams, null, 2) + '</pre>';
+                
+                resultsDiv.innerHTML = html;
+                showStatus(`Found ${teams.length} result(s)`);
+            } catch (err) {
+                resultsDiv.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
+                showStatus('Error occurred');
+            }
+        }
+
+        // Auto-search on load
+        window.onload = () => {
+            searchTeam('Hanoi');
+        };
+    </script>
+</body>
+</html>
