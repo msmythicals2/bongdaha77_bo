@@ -54,6 +54,28 @@ const CACHE_TTL = {
   LEAGUES: 86400         // 24 hours for leagues
 };
 
+// ============================================
+// TEAM ID MAPPING
+// ============================================
+// Maps incorrect/old Team IDs to correct ones
+// This fixes issues where frontend uses wrong IDs
+const TEAM_ID_MAPPING = {
+  9568: 239235,   // Inter Miami CF (old -> correct)
+  // Removed Al-Nassr mapping - let it use SportMonks ID directly
+  // 2939: 2506,     // Al-Nassr FC (old -> correct)
+  2931: 7011,     // Al-Hilal (old -> correct)
+  // Add more mappings as needed
+};
+
+function getCorrectTeamId(id) {
+  const numId = parseInt(id);
+  const mappedId = TEAM_ID_MAPPING[numId];
+  if (mappedId && mappedId !== numId) {
+    console.log(`🔄 Team ID mapping: ${numId} -> ${mappedId}`);
+  }
+  return mappedId || numId;
+}
+
 function parseAllowedOrigins() {
   const raw = process.env.CORS_ALLOWED_ORIGINS;
   if (!raw) return [];
@@ -601,31 +623,35 @@ app.get("/api/teams/search", async (req, res) => {
     
     if (sportmonksData && sportmonksData.data && sportmonksData.data.length > 0) {
       // Convert SportMonks format to API-Football format
-      const teams = sportmonksData.data.map(team => ({
-        team: {
-          id: team.id,
-          name: team.name,
-          code: team.short_code,
-          country: team.country?.name || '',
-          founded: team.founded || null,
-          logo: team.image_path || ''
-        },
-        venue: {
-          id: team.venue_id,
-          name: team.venue?.name || '',
-          city: team.venue?.city_name || ''
-        }
-      }));
+      // Filter out teams without country information (usually youth/reserve teams)
+      const teams = sportmonksData.data
+        .filter(team => team.country && team.country.name) // Only include teams with country
+        .map(team => ({
+          team: {
+            id: team.id,
+            name: team.name,
+            code: team.short_code,
+            country: team.country.name,
+            founded: team.founded || null,
+            logo: team.image_path || ''
+          },
+          venue: {
+            id: team.venue_id,
+            name: team.venue?.name || '',
+            city: team.venue?.city_name || ''
+          }
+        }));
       
       setCache(cacheKey, teams, CACHE_TTL.TEAMS);
-      console.log(`Found ${teams.length} teams from SportMonks`);
+      console.log(`Found ${teams.length} teams from SportMonks (filtered by country)`);
       return res.json(teams);
     }
     
     // Fallback to API-Football
     console.log('SportMonks returned no results, trying API-Football...');
     const data = await apiFootballRequest('/teams', { search: name });
-    const teams = data?.response || [];
+    // Also filter API-Football results
+    const teams = (data?.response || []).filter(item => item.team && item.team.country);
     
     setCache(cacheKey, teams, CACHE_TTL.TEAMS);
     res.json(teams);
@@ -636,12 +662,37 @@ app.get("/api/teams/search", async (req, res) => {
 });
 
 // ============================================
+// SPORTMONKS TEAM SEARCH (Direct SportMonks search)
+// ============================================
+app.get("/api/sportmonks/teams/search", async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name || name.length < 1) return res.json({ data: [] });
+    
+    console.log(`SportMonks direct search for: ${name}`);
+    
+    const sportmonksData = await sportmonksRequest('/teams/search/' + encodeURIComponent(name));
+    
+    if (sportmonksData && sportmonksData.data) {
+      console.log(`SportMonks found ${sportmonksData.data.length} teams`);
+      return res.json(sportmonksData);
+    }
+    
+    res.json({ data: [] });
+  } catch (err) {
+    console.error("SportMonks search error:", err.message);
+    res.json({ data: [] });
+  }
+});
+
+// ============================================
 // TEAM STATISTICS (SportMonks)
 // ============================================
 app.get("/api/teams/:id/statistics", async (req, res) => {
   try {
-    const { id } = req.params;
-    const season = req.query.season || 2025;
+    const originalId = req.params.id;
+    const id = getCorrectTeamId(originalId);
+    const season = req.query.season || 2025; // 2025-2026 season (use start year)
     
     const cacheKey = getCacheKey('team-statistics', { id, season });
     const cached = getCache(cacheKey);
@@ -708,7 +759,8 @@ app.get("/api/teams/:id/statistics", async (req, res) => {
 // ============================================
 app.get("/api/teams/:id/info", async (req, res) => {
   try {
-    const { id } = req.params;
+    const originalId = req.params.id;
+    const id = getCorrectTeamId(originalId);
     
     const cacheKey = getCacheKey('team-info', { id });
     const cached = getCache(cacheKey);
@@ -754,19 +806,103 @@ app.get("/api/teams/:id/info", async (req, res) => {
 });
 
 // ============================================
-// TEAM FIXTURES (API-Football only)
+// TEAM FIXTURES (API-Football priority, SportMonks fallback)
 // ============================================
 app.get("/api/teams/:id/fixtures", async (req, res) => {
   console.log("Fixtures endpoint hit with id:", req.params.id);
   try {
-    const { id } = req.params;
-    const season = 2025;
+    const originalId = req.params.id;
+    const id = getCorrectTeamId(originalId);
+    const season = 2025; // 2025-2026 season (use start year)
     
+    console.log(`\n=== FIXTURES REQUEST ===`);
+    console.log(`Original ID: ${originalId}, Mapped ID: ${id}`);
     console.log(`Fetching fixtures for team ${id}, season ${season}`);
     
-    const data = await apiFootballRequest('/fixtures', { team: id, season });
+    // Try API-Football first
+    let data = await apiFootballRequest('/fixtures', { team: id, season });
     
-    console.log(`Received ${data?.response?.length || 0} fixtures for team ${id}`);
+    console.log(`API-Football: ${data?.response?.length || 0} fixtures for season ${season}`);
+    
+    // If no data for season 2025, try getting last 50 matches (any season)
+    if (!data?.response || data.response.length === 0) {
+      console.log(`No fixtures found for season ${season}, trying last 50 matches...`);
+      data = await apiFootballRequest('/fixtures', { team: id, last: 50 });
+      console.log(`API-Football: ${data?.response?.length || 0} fixtures from last 50`);
+    }
+    
+    // If still no data, try SportMonks using correct schedules endpoint
+    if (!data?.response || data.response.length === 0) {
+      console.log(`API-Football returned no data, trying SportMonks schedules endpoint...`);
+      const sportmonksData = await sportmonksRequest(`/schedules/teams/${id}`);
+      
+      if (sportmonksData?.data && sportmonksData.data.length > 0) {
+        console.log(`SportMonks: ${sportmonksData.data.length} stages found`);
+        
+        // Extract all fixtures from stages and rounds
+        const fixtures = [];
+        for (const stage of sportmonksData.data) {
+          if (stage.rounds) {
+            for (const round of stage.rounds) {
+              if (round.fixtures) {
+                for (const f of round.fixtures) {
+                  const homeTeam = f.participants?.find(p => p.meta?.location === 'home');
+                  const awayTeam = f.participants?.find(p => p.meta?.location === 'away');
+                  
+                  // Find current/final scores (type_id: 1525 for CURRENT)
+                  const homeScore = f.scores?.find(s => s.participant_id === homeTeam?.id && s.type_id === 1525);
+                  const awayScore = f.scores?.find(s => s.participant_id === awayTeam?.id && s.type_id === 1525);
+                  
+                  fixtures.push({
+                    fixture: {
+                      id: f.id,
+                      date: f.starting_at,
+                      timestamp: f.starting_at_timestamp || (new Date(f.starting_at).getTime() / 1000),
+                      status: {
+                        short: f.state_id === 5 ? 'FT' : (f.state_id === 1 ? 'NS' : 'LIVE'),
+                        long: f.result_info || 'Not Started'
+                      }
+                    },
+                    league: {
+                      id: f.league_id || stage.league_id || 0,
+                      name: stage.name || '',
+                      logo: ''
+                    },
+                    teams: {
+                      home: {
+                        id: homeTeam?.id || 0,
+                        name: homeTeam?.name || '',
+                        logo: homeTeam?.image_path || ''
+                      },
+                      away: {
+                        id: awayTeam?.id || 0,
+                        name: awayTeam?.name || '',
+                        logo: awayTeam?.image_path || ''
+                      }
+                    },
+                    goals: {
+                      home: homeScore?.score?.goals || 0,
+                      away: awayScore?.score?.goals || 0
+                    }
+                  });
+                }
+              }
+            }
+          }
+        }
+        
+        console.log(`SportMonks: Extracted ${fixtures.length} fixtures from stages`);
+        data = { response: fixtures };
+      }
+    }
+    
+    if (data?.response && data.response.length > 0) {
+      console.log(`Total fixtures: ${data.response.length}`);
+      console.log(`Date range: ${data.response[0].fixture.date} to ${data.response[data.response.length - 1].fixture.date}`);
+    } else {
+      console.log(`⚠️ NO FIXTURES FOUND for team ${id} from any source`);
+    }
+    console.log(`=== END FIXTURES ===\n`);
     
     res.json({ fixtures: data?.response || [] });
   } catch (err) {
@@ -778,33 +914,119 @@ app.get("/api/teams/:id/fixtures", async (req, res) => {
 console.log("Team API routes registered");
 
 // ============================================
-// TEAM STANDINGS (API-Football only)
+// TEAM STANDINGS (API-Football priority, SportMonks fallback)
 // ============================================
 app.get("/api/teams/:id/standings", async (req, res) => {
   try {
-    const { id } = req.params;
-    const season = 2025;
+    const originalId = req.params.id;
+    const id = getCorrectTeamId(originalId);
+    const season = 2025; // 2025-2026 season (use start year)
     
+    console.log(`\n=== STANDINGS REQUEST ===`);
     console.log(`Fetching standings for team ${id}, season ${season}`);
     
-    const teamStandings = await apiFootballRequest('/standings', { team: id, season });
+    let teamStandings = await apiFootballRequest('/standings', { team: id, season });
+    
+    // If no data for season 2025, try current season (no season parameter)
+    if (!teamStandings?.response || teamStandings.response.length === 0) {
+      console.log(`No standings found for season ${season}, trying current season...`);
+      teamStandings = await apiFootballRequest('/standings', { team: id });
+    }
     
     const teamData = teamStandings?.response || [];
-    console.log(`Team is in ${teamData.length} leagues`);
+    console.log(`API-Football: Team is in ${teamData.length} leagues`);
     
     const fullStandings = [];
     for (const standing of teamData) {
       const leagueId = standing.league.id;
-      console.log(`Fetching full standings for league ${leagueId}`);
+      const leagueSeason = standing.league.season; // Use the season from the response
+      console.log(`Fetching full standings for league ${leagueId}, season ${leagueSeason}`);
       
-      const leagueStandings = await apiFootballRequest('/standings', { league: leagueId, season });
+      const leagueStandings = await apiFootballRequest('/standings', { league: leagueId, season: leagueSeason });
       
       if (leagueStandings?.response && leagueStandings.response.length > 0) {
         fullStandings.push(leagueStandings.response[0]);
       }
     }
     
+    // If no standings from API-Football, try SportMonks
+    if (fullStandings.length === 0) {
+      console.log(`API-Football returned no standings, trying SportMonks...`);
+      
+      // First, get team info to find which leagues they're in
+      const teamInfo = await sportmonksRequest(`/teams/${id}`, {
+        include: 'activeSeasons.league'
+      });
+      
+      if (teamInfo?.data?.active_seasons) {
+        console.log(`Team is in ${teamInfo.data.active_seasons.length} active seasons`);
+        
+        for (const activeSeason of teamInfo.data.active_seasons) {
+          const leagueId = activeSeason.league_id;
+          const seasonId = activeSeason.id;
+          
+          console.log(`Fetching standings for league ${leagueId}, season ${seasonId}`);
+          
+          // Use the correct SportMonks standings endpoint with filters
+          const standingsData = await sportmonksRequest(`/standings`, {
+            filter: `standingLeagues:${leagueId};standingSeasons:${seasonId}`,
+            include: 'participant;league'
+          });
+          
+          if (standingsData?.data && standingsData.data.length > 0) {
+            // Group standings by league
+            const standingsByLeague = {};
+            
+            for (const standing of standingsData.data) {
+              const leagueKey = standing.league_id;
+              if (!standingsByLeague[leagueKey]) {
+                standingsByLeague[leagueKey] = {
+                  league: standing.league || activeSeason.league,
+                  standings: []
+                };
+              }
+              
+              standingsByLeague[leagueKey].standings.push({
+                rank: standing.position || 0,
+                team: {
+                  id: standing.participant?.id || 0,
+                  name: standing.participant?.name || '',
+                  logo: standing.participant?.image_path || ''
+                },
+                points: standing.points || 0,
+                goalsDiff: (standing.result?.overall?.goals_scored || 0) - (standing.result?.overall?.goals_against || 0),
+                all: {
+                  played: standing.result?.overall?.games_played || 0,
+                  win: standing.result?.overall?.won || 0,
+                  draw: standing.result?.overall?.draw || 0,
+                  lose: standing.result?.overall?.lost || 0,
+                  goals: {
+                    for: standing.result?.overall?.goals_scored || 0,
+                    against: standing.result?.overall?.goals_against || 0
+                  }
+                }
+              });
+            }
+            
+            // Convert to API-Football format
+            for (const [leagueKey, data] of Object.entries(standingsByLeague)) {
+              fullStandings.push({
+                league: {
+                  id: data.league?.id || 0,
+                  name: data.league?.name || '',
+                  logo: data.league?.image_path || '',
+                  season: seasonId
+                },
+                standings: [data.standings.sort((a, b) => a.rank - b.rank)]
+              });
+            }
+          }
+        }
+      }
+    }
+    
     console.log(`Returning ${fullStandings.length} league standings`);
+    console.log(`=== END STANDINGS ===\n`);
     res.json({ standings: fullStandings });
   } catch (err) {
     console.error("team standings error:", err.message);
@@ -815,12 +1037,16 @@ app.get("/api/teams/:id/standings", async (req, res) => {
 // ============================================
 // TEAM PLAYERS/SQUAD (SportMonks priority, fallback API-Football)
 // ============================================
+// TEAM PLAYERS/SQUAD (SportMonks priority, fallback API-Football)
+// ============================================
 app.get("/api/teams/:id/players", async (req, res) => {
   try {
-    const { id } = req.params;
-    let season = req.query.season || 2025;
+    const originalId = req.params.id;
+    const id = getCorrectTeamId(originalId);
+    let season = req.query.season || 2025; // 2025-2026 season (use start year)
     
-    console.log(`Fetching players for team ${id}, season ${season}`);
+    console.log(`\n=== PLAYERS REQUEST ===`);
+    console.log(`Original ID: ${originalId}, Mapped ID: ${id}, Season: ${season}`);
     
     const cacheKey = getCacheKey('team-players', { id, season });
     const cached = getCache(cacheKey);
@@ -829,13 +1055,22 @@ app.get("/api/teams/:id/players", async (req, res) => {
       return res.json(cached);
     }
 
-    // Try SportMonks first for squad data
-    const sportmonksData = await sportmonksRequest(`/squads/seasons/${season}/teams/${id}`, {
+    // Try SportMonks first - use extended squad endpoint (gets current season automatically)
+    console.log(`Trying SportMonks extended squad for team ${id}...`);
+    const sportmonksData = await sportmonksRequest(`/squads/teams/${id}`, {
       include: 'player;player.position;player.nationality;player.detailedPosition;player.statistics.details'
     });
     
     if (sportmonksData && sportmonksData.data && sportmonksData.data.length > 0) {
       console.log(`SportMonks returned ${sportmonksData.data.length} players`);
+      
+      // Debug: Check first player structure
+      if (sportmonksData.data[0]) {
+        const firstSquad = sportmonksData.data[0];
+        console.log('First squad team_id:', firstSquad.team_id);
+        console.log('First squad player name:', firstSquad.player?.display_name || firstSquad.player?.common_name);
+        console.log('First squad jersey:', firstSquad.jersey_number);
+      }
       
       // Convert SportMonks format to enhanced format
       const players = sportmonksData.data.map(squad => {
@@ -843,12 +1078,25 @@ app.get("/api/teams/:id/players", async (req, res) => {
         const stats = player.statistics && player.statistics.length > 0 ? player.statistics[0] : null;
         const details = stats?.details || [];
         
-        // Extract detailed statistics
+        // Extract detailed statistics using correct type IDs
         const findStat = (typeId) => details.find(d => d.type_id === typeId);
+        
+        // Helper to get value from stat
+        const getStatValue = (typeId, path = 'total') => {
+          const stat = findStat(typeId);
+          if (!stat || !stat.value) return null;
+          if (path === 'total') return stat.value.total || stat.value;
+          const keys = path.split('.');
+          let value = stat.value;
+          for (const key of keys) {
+            value = value?.[key];
+          }
+          return value;
+        };
         
         return {
           player: {
-            id: player.player_id,
+            id: player.player_id || player.id || 0,
             name: player.display_name || player.common_name,
             firstname: player.firstname,
             lastname: player.lastname,
@@ -861,7 +1109,9 @@ app.get("/api/teams/:id/players", async (req, res) => {
             nationality: player.nationality?.name || player.country_of_birth,
             height: player.height ? `${player.height} cm` : null,
             weight: player.weight ? `${player.weight} kg` : null,
-            photo: player.image_path || ''
+            photo: player.image_path || '',
+            number: squad.jersey_number || null,
+            position: player.detailedPosition?.name || player.position?.name || 'Unknown'
           },
           statistics: [{
             team: {
@@ -870,50 +1120,58 @@ app.get("/api/teams/:id/players", async (req, res) => {
               logo: ''
             },
             games: {
-              appearences: findStat(52)?.value?.all?.count || squad.appearences || 0,
-              lineups: squad.lineups || 0,
-              minutes: findStat(86)?.value?.total || squad.minutes || 0,
+              appearences: getStatValue(321) || 0,  // Type 321: Appearances
+              lineups: getStatValue(322) || 0,      // Type 322: Lineups
+              minutes: getStatValue(119) || 0,      // Type 119: Minutes Played
               number: squad.jersey_number || null,
               position: player.detailedPosition?.name || player.position?.name || squad.position || 'Unknown',
-              rating: findStat(127)?.value?.average || null,
+              rating: getStatValue(118) || null,    // Type 118: Rating
               captain: squad.captain || false
             },
             goals: {
-              total: findStat(52)?.value?.all?.count || squad.goals || 0,
-              conceded: findStat(88)?.value?.total || null,
-              assists: findStat(79)?.value?.total || squad.assists || 0,
-              saves: findStat(91)?.value?.total || null
+              total: getStatValue(52) || 0,         // Type 52: Goals
+              conceded: getStatValue(88) || null,   // Type 88: Goals Conceded
+              assists: getStatValue(79) || 0,       // Type 79: Assists
+              saves: getStatValue(57) || null       // Type 57: Saves
             },
             shots: {
-              total: findStat(42)?.value?.total || null,
-              on: findStat(43)?.value?.total || null,
-              accuracy: findStat(43)?.value?.percentage || null
+              total: getStatValue(42) || null,      // Type 42: Shots Total
+              on: getStatValue(86) || null,         // Type 86: Shots On Target
+              accuracy: null  // Will calculate if both values exist
             },
             passes: {
-              total: findStat(84)?.value?.total || null,
-              accuracy: findStat(84)?.value?.percentage || null,
-              key: findStat(85)?.value?.total || null
+              total: getStatValue(80) || null,      // Type 80: Passes
+              accuracy: getStatValue(1584) || null, // Type 1584: Accurate Passes Percentage
+              key: getStatValue(117) || null        // Type 117: Key Passes
             },
             tackles: {
-              total: findStat(71)?.value?.total || null,
-              blocks: findStat(72)?.value?.total || null,
-              interceptions: findStat(73)?.value?.total || null
+              total: getStatValue(78) || null,      // Type 78: Tackles
+              blocks: getStatValue(97) || null,     // Type 97: Blocked Shots
+              interceptions: getStatValue(100) || null  // Type 100: Interceptions
             },
             cards: {
-              yellow: findStat(83)?.value?.total || squad.yellowcards || 0,
-              yellowred: squad.yellowred || 0,
-              red: findStat(82)?.value?.total || squad.redcards || 0
+              yellow: getStatValue(84) || 0,        // Type 84: Yellow Cards
+              yellowred: getStatValue(85) || 0,     // Type 85: Yellow-Red Cards
+              red: getStatValue(83) || 0            // Type 83: Red Cards
             },
             penalty: {
-              scored: findStat(47)?.value?.scored || null,
-              missed: findStat(47)?.value?.missed || null,
-              saved: findStat(91)?.value?.penalty_saves || null
+              scored: getStatValue(47, 'scored') || null,   // Type 47: Penalties
+              missed: getStatValue(47, 'missed') || null,
+              saved: null
             }
           }]
         };
       });
       
-      const result = { players, coach: null, season, source: 'sportmonks' };
+      // Calculate shot accuracy where possible
+      players.forEach(p => {
+        const stats = p.statistics[0];
+        if (stats.shots.total && stats.shots.on) {
+          stats.shots.accuracy = (stats.shots.on / stats.shots.total * 100).toFixed(1);
+        }
+      });
+      
+      const result = { players, coach: null, season: 'current', source: 'sportmonks' };
       setCache(cacheKey, result, CACHE_TTL.SQUADS);
       return res.json(result);
     }
@@ -966,6 +1224,44 @@ function calculateAge(birthDate) {
   }
   return age;
 }
+
+// ============================================
+// PLAYER TRANSFERS (SportMonks)
+// ============================================
+app.get("/api/players/:id/transfers", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`Fetching transfers for player ${id}`);
+    
+    const cacheKey = getCacheKey('player-transfers', { id });
+    const cached = getCache(cacheKey);
+    if (cached) {
+      console.log('Returning cached transfers');
+      return res.json(cached);
+    }
+
+    // Get player transfers from SportMonks
+    const transfersData = await sportmonksRequest(`/players/${id}`, {
+      include: 'transfers'
+    });
+    
+    if (transfersData && transfersData.data && transfersData.data.transfers) {
+      const transfers = transfersData.data.transfers;
+      console.log(`Found ${transfers.length} transfers for player ${id}`);
+      
+      const result = { transfers, source: 'sportmonks' };
+      setCache(cacheKey, result, CACHE_TTL.PLAYERS);
+      return res.json(result);
+    }
+    
+    // No transfers found
+    res.json({ transfers: [], source: 'none' });
+  } catch (err) {
+    console.error("player transfers error:", err.message);
+    res.json({ transfers: [], source: 'error' });
+  }
+});
 
 // ============================================
 // PLAYER SEARCH (SportMonks priority, fallback API-Football)

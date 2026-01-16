@@ -99,7 +99,7 @@
   <main>
 
     <!-- ===== HOME / FIXTURES ===== -->
-    <div class="main-card">
+    <div class="main-card" id="fixtures-view">
 
       <div class="tabs-nav">
         <button class="tab-btn active" data-tab="all">ALL</button>
@@ -133,6 +133,30 @@
         <div class="loading-placeholder">Initialising Match Data...</div>
       </div>
 
+    </div>
+
+    <!-- ===== TEAM DETAILS VIEW ===== -->
+    <div id="team-details-view" class="main-card hidden">
+      <div class="detail-view-header">
+        <button class="back-btn" onclick="closeTeamDetailsView()">
+          <i class="fa-solid fa-arrow-left"></i> Back to Fixtures
+        </button>
+      </div>
+      <div id="team-details-content">
+        <div class="loading-placeholder">Loading team details...</div>
+      </div>
+    </div>
+
+    <!-- ===== PLAYER DETAILS VIEW ===== -->
+    <div id="player-details-view" class="main-card hidden">
+      <div class="detail-view-header">
+        <button class="back-btn" onclick="closePlayerDetailsView()">
+          <i class="fa-solid fa-arrow-left"></i> Back to Fixtures
+        </button>
+      </div>
+      <div id="player-details-content">
+        <div class="loading-placeholder">Loading player details...</div>
+      </div>
     </div>
 
     <!-- ===== LEAGUE PAGE (🔥 关键：独立出来) ===== -->
@@ -198,9 +222,9 @@
     <div class="sidebar-section mb-4">
       <div class="featured-header">
         <span>Live Matches</span>
-        <div>
-          <span id="carousel-prev" class="featured-nav">‹</span>
-          <span id="carousel-next" class="featured-nav">›</span>
+        <div class="carousel-nav-horizontal">
+          <span id="carousel-prev" class="featured-nav">◄</span>
+          <span id="carousel-next" class="featured-nav">►</span>
         </div>
       </div>
 

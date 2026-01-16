@@ -139,6 +139,7 @@ async function apiGetJSONCached(url, ttl = CACHE_TTL) {
 async function apiGetJSON(url) {
   return apiGetJSONCached(url, CACHE_TTL);
 }
+
 // Competition data
 const COMPETITION_DATA = [
   { id: 39, name: "Premier League", country: "England", logo: "https://media.api-sports.io/football/leagues/39.png" },
@@ -490,11 +491,23 @@ function renderFixtures(fixtures, live) {
 
                         const getMatchTimeDisplay = (fixture) => {
                             const elapsed = fixture.status.elapsed;
-                            const extra = fixture.status.extra;
+                            let extra = fixture.status.extra;
                             
                             if (elapsed !== null && elapsed !== undefined) {
+                                // Fix: If extra time seems wrong (e.g., extra > 45), calculate it correctly
                                 if (extra && extra > 0) {
-                                    return `${elapsed}+${extra}'`;
+                                    // If extra is greater than elapsed, it might be the total time
+                                    if (extra > elapsed) {
+                                        extra = extra - elapsed;
+                                    }
+                                    // Limit extra time to reasonable values (max 15 minutes)
+                                    if (extra > 15) {
+                                        extra = extra % 45; // Get remainder after 45 minutes
+                                        if (extra > 15) extra = 15;
+                                    }
+                                    if (extra > 0) {
+                                        return `${elapsed}+${extra}'`;
+                                    }
                                 }
                                 return `${elapsed}'`;
                             }
@@ -502,7 +515,7 @@ function renderFixtures(fixtures, live) {
                         };
 
                         let timeHtml = isLive
-                          ? `<span class="live-time"><span class="live-dot"></span>${getMatchTimeDisplay(f.fixture) || 'LIVE'}</span>`
+                          ? `<span class="live-time" data-fixture-id="${f.fixture.id}"><span class="live-dot"></span>${getMatchTimeDisplay(f.fixture) || 'LIVE'}</span>`
                           : isDone
                             ? `<span class="status-finished">Finished</span>`
                             : formatHHMM(f.fixture.date);
@@ -549,6 +562,10 @@ function renderFixtures(fixtures, live) {
     el.innerHTML = html;
 }
 // Render featured live
+// Live match time tracking
+let liveMatchTimers = {};
+let liveDataSyncInterval = null;
+
 function renderFeaturedLive(live = []) {
   const box = document.getElementById("live-carousel-content");
   if (!box) return;
@@ -556,40 +573,141 @@ function renderFeaturedLive(live = []) {
     box.innerHTML = `<div class="loading-placeholder">No live matches</div>`;
     return;
   }
+  
   const fx = live[state.carouselIndex % live.length];
+  
+  // Clear existing timer for this match
+  if (liveMatchTimers[fx.fixture.id]) {
+    clearInterval(liveMatchTimers[fx.fixture.id]);
+  }
   
   const getMatchTime = (fixture) => {
     const elapsed = fixture.status.elapsed;
-    const extra = fixture.status.extra;
+    let extra = fixture.status.extra;
     
     if (elapsed !== null && elapsed !== undefined) {
       if (extra && extra > 0) {
-        return `${elapsed}+${extra}'`;
+        // Fix: If extra time seems wrong, calculate it correctly
+        if (extra > elapsed) {
+          extra = extra - elapsed;
+        }
+        // Limit extra time to reasonable values
+        if (extra > 15) {
+          extra = extra % 45;
+          if (extra > 15) extra = 15;
+        }
+        if (extra > 0) {
+          return { minutes: elapsed, extra: extra };
+        }
       }
-      return `${elapsed}'`;
+      return { minutes: elapsed, extra: 0 };
     }
-    return '';
+    return null;
   };
   
+  const timeData = getMatchTime(fx.fixture);
+  const initialTime = timeData ? `${timeData.minutes}'${timeData.extra > 0 ? `+${timeData.extra}` : ''}` : 'LIVE';
+  
   box.innerHTML = `
-    <div class="text-center">
-      <div class="text-[10px] text-gray-500 mb-2 uppercase tracking-widest">${escapeHtml(fx.league.name)}</div>
-      <div class="flex items-center justify-around gap-2 mt-4">
-        <div class="text-center">
-          <img src="${fx.teams.home.logo}" class="w-10 h-10 mx-auto mb-2 object-contain">
-          <div class="text-[11px] font-bold w-20 truncate">${escapeHtml(fx.teams.home.name)}</div>
+    <div class="live-match-card">
+      <div class="live-match-league">${escapeHtml(fx.league.name)}</div>
+      <div class="live-match-teams">
+        <div class="live-team live-team-home">
+          <img src="${fx.teams.home.logo}" class="live-team-logo" onerror="this.src='https://via.placeholder.com/80'">
+          <div class="live-team-name">${escapeHtml(fx.teams.home.name)}</div>
         </div>
-        <div class="text-xl font-black text-white">${fx.goals.home ?? 0} : ${fx.goals.away ?? 0}</div>
-        <div class="text-center">
-          <img src="${fx.teams.away.logo}" class="w-10 h-10 mx-auto mb-2 object-contain">
-          <div class="text-[11px] font-bold w-20 truncate">${escapeHtml(fx.teams.away.name)}</div>
+        <div class="live-match-score">
+          <div class="live-score-numbers">
+            <span class="live-score-home">${fx.goals.home ?? 0}</span>
+            <span class="live-score-separator">:</span>
+            <span class="live-score-away">${fx.goals.away ?? 0}</span>
+          </div>
+          <div class="live-match-time" id="live-time-${fx.fixture.id}">
+            <span class="live-dot"></span>
+            <span class="live-time-text">${initialTime}</span>
+          </div>
+          <button class="watch-live-btn" onclick="window.open('https://xoilac.tv', '_blank')">
+            <i class="fa-solid fa-play"></i> Watch Live
+          </button>
         </div>
-      </div>
-      <div class="mt-4 text-[10px] text-red-500 font-bold animate-pulse tracking-widest">
-        ${getMatchTime(fx.fixture) ? `<span class="live-dot" style="display: inline-block; width: 6px; height: 6px; background-color: #ef4444; border-radius: 50%; margin-right: 4px; animation: pulse 2s infinite;"></span>${getMatchTime(fx.fixture)}` : 'LIVE'}
+        <div class="live-team live-team-away">
+          <img src="${fx.teams.away.logo}" class="live-team-logo" onerror="this.src='https://via.placeholder.com/80'">
+          <div class="live-team-name">${escapeHtml(fx.teams.away.name)}</div>
+        </div>
       </div>
     </div>
   `;
+  
+  // Update display - increment minutes automatically
+  if (timeData) {
+    const baseMinutes = timeData.minutes;
+    
+    // Track when this match started (only set once per match)
+    if (!matchStartTimes[fx.fixture.id]) {
+      matchStartTimes[fx.fixture.id] = Date.now();
+      console.log(`Match ${fx.fixture.id} start time recorded:`, new Date(matchStartTimes[fx.fixture.id]).toLocaleTimeString());
+    }
+    
+    const matchStartTime = matchStartTimes[fx.fixture.id];
+    
+    // Update every second to ensure smooth minute transitions
+    liveMatchTimers[fx.fixture.id] = setInterval(() => {
+      const timeElement = document.getElementById(`live-time-${fx.fixture.id}`);
+      if (timeElement) {
+        const timeText = timeElement.querySelector('.live-time-text');
+        if (timeText) {
+          // Calculate minutes elapsed since this match was FIRST displayed
+          const minutesElapsed = Math.floor((Date.now() - matchStartTime) / 60000);
+          const currentMinutes = baseMinutes + minutesElapsed;
+          const displayTime = `${currentMinutes}'${timeData.extra > 0 ? `+${timeData.extra}` : ''}`;
+          timeText.textContent = displayTime;
+        }
+      }
+    }, 1000); // Update every second to catch minute changes
+  }
+}
+
+// Note: Live data is automatically refreshed when:
+// 1. Page loads
+// 2. Auto-rotate switches to next match (every 60 seconds)
+// 3. User manually clicks prev/next arrows
+// This ensures fresh data without interrupting the smooth timer
+
+// Auto-rotate live matches every 15 seconds
+let autoRotateInterval = null;
+
+function startLiveMatchAutoRotate() {
+  // Clear existing interval
+  if (autoRotateInterval) {
+    clearInterval(autoRotateInterval);
+  }
+  
+  // Only start if there are multiple matches
+  if (!state.lastLive || state.lastLive.length <= 1) {
+    console.log('Auto-rotate: Not enough matches to rotate');
+    return;
+  }
+  
+  console.log(`Auto-rotate: Starting with ${state.lastLive.length} matches`);
+  
+  // Start new interval
+  autoRotateInterval = setInterval(() => {
+    if (state.lastLive && state.lastLive.length > 1) {
+      const oldIndex = state.carouselIndex;
+      state.carouselIndex = (state.carouselIndex + 1) % state.lastLive.length;
+      console.log(`Auto-rotate: ${oldIndex} → ${state.carouselIndex}`);
+      renderFeaturedLive(state.lastLive);
+    }
+  }, 60000); // 60 seconds (1 minute)
+}
+
+// Stop auto-rotate (call this when user manually navigates)
+function stopLiveMatchAutoRotate() {
+  if (autoRotateInterval) {
+    console.log('Auto-rotate: Stopped');
+    clearInterval(autoRotateInterval);
+    autoRotateInterval = null;
+  }
 }
 
 // Render news
@@ -659,9 +777,22 @@ function renderSummary(match, period = 'all') {
       let t = "";
       if (ev.time?.elapsed != null) {
         const elapsed = ev.time.elapsed;
-        const extra = ev.time.extra;
+        let extra = ev.time.extra;
         if (extra && extra > 0) {
-          t = `${elapsed}+${extra}'`;
+          // Fix: If extra time seems wrong, calculate it correctly
+          if (extra > elapsed) {
+            extra = extra - elapsed;
+          }
+          // Limit extra time to reasonable values
+          if (extra > 15) {
+            extra = extra % 45;
+            if (extra > 15) extra = 15;
+          }
+          if (extra > 0) {
+            t = `${elapsed}+${extra}'`;
+          } else {
+            t = `${elapsed}'`;
+          }
         } else {
           t = `${elapsed}'`;
         }
@@ -1918,6 +2049,8 @@ async function refreshAll() {
       state.lastLive = live || [];
       updateLiveBadge(state.lastLive);
       renderFeaturedLive(state.lastLive);
+      startLiveMatchAutoRotate(); // Start auto-rotate
+      startFixturesTimeUpdate(); // Start auto-updating fixtures times
     });
 
     loadNews().then(news => {
@@ -1979,8 +2112,18 @@ function bindEvents() {
   dp?.addEventListener("change", () => { const [y, m, d] = dp.value.split("-").map(Number); onDateChange(new Date(y, m - 1, d)); });
 
   // Carousel
-  document.getElementById("carousel-prev")?.addEventListener("click", () => { state.carouselIndex = state.carouselIndex > 0 ? state.carouselIndex - 1 : 0; renderFeaturedLive(state.lastLive); });
-  document.getElementById("carousel-next")?.addEventListener("click", () => { state.carouselIndex++; renderFeaturedLive(state.lastLive); });
+  document.getElementById("carousel-prev")?.addEventListener("click", () => { 
+    stopLiveMatchAutoRotate(); 
+    state.carouselIndex = state.carouselIndex > 0 ? state.carouselIndex - 1 : 0; 
+    renderFeaturedLive(state.lastLive); 
+    startLiveMatchAutoRotate(); 
+  });
+  document.getElementById("carousel-next")?.addEventListener("click", () => { 
+    stopLiveMatchAutoRotate(); 
+    state.carouselIndex++; 
+    renderFeaturedLive(state.lastLive); 
+    startLiveMatchAutoRotate(); 
+  });
 
   // Global clicks
   document.addEventListener("click", e => {
@@ -2098,6 +2241,7 @@ setInterval(() => {
       state.lastLive = live;
       updateLiveBadge(state.lastLive);
       renderFeaturedLive(state.lastLive);
+      startLiveMatchAutoRotate(); // Start auto-rotate
       
       if (state.tab === 'all' || state.tab === 'live') {
         renderFixtures(state.lastFixtures, state.lastLive);
@@ -2698,77 +2842,89 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// Show team details modal
+// Show team details in center column (not modal)
 function showTeamDetails(team) {
-  const modal = document.createElement('div');
-  modal.className = 'team-details-modal';
-  modal.innerHTML = `
-    <div class="team-details-content">
-      <div class="team-details-header">
-        <div class="team-details-title">
-          <img src="${team.logo}" class="team-details-logo">
-          <div class="team-details-info">
-            <h2>${escapeHtml(team.name)}</h2>
-            <p>${escapeHtml(team.country)}</p>
-          </div>
-        </div>
-        <button class="team-details-close"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      
-      <div class="team-details-tabs">
-        <button class="team-details-tab active" data-tab="fixtures">Fixtures</button>
-        <button class="team-details-tab" data-tab="results">Recent Result</button>
-        <button class="team-details-tab" data-tab="standings">Standings</button>
-        <button class="team-details-tab" data-tab="players">Players</button>
-        <button class="team-details-tab" data-tab="statistics">Statistics</button>
-        <button class="team-details-tab" data-tab="details">Details</button>
-      </div>
-      
-      <div class="team-details-body">
-        <div class="team-details-loading">
-          <i class="fa-solid fa-spinner fa-spin"></i>
-          <div>Loading team information...</div>
+  // Hide fixtures view
+  document.getElementById('fixtures-view').classList.add('hidden');
+  document.getElementById('league-page').classList.add('hidden');
+  document.getElementById('player-details-view').classList.add('hidden');
+  
+  // Show team details view
+  const teamView = document.getElementById('team-details-view');
+  teamView.classList.remove('hidden');
+  
+  const content = document.getElementById('team-details-content');
+  content.innerHTML = `
+    <div class="team-detail-header">
+      <img src="${team.logo}" class="team-detail-logo">
+      <div class="team-detail-info">
+        <h1>${escapeHtml(team.name)}</h1>
+        <div class="team-detail-meta">
+          <span><i class="fa-solid fa-flag"></i> ${escapeHtml(team.country)}</span>
         </div>
       </div>
     </div>
+    
+    <div class="detail-tabs">
+      <button class="detail-tab active" data-tab="fixtures">Fixtures</button>
+      <button class="detail-tab" data-tab="results">Recent Result</button>
+      <button class="detail-tab" data-tab="standings">Standings</button>
+      <button class="detail-tab" data-tab="players">Players</button>
+      <button class="detail-tab" data-tab="statistics">Statistics</button>
+      <button class="detail-tab" data-tab="details">Details</button>
+    </div>
+    
+    <div class="detail-tab-content active" id="team-tab-fixtures">
+      <div class="loading-placeholder">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <div>Loading fixtures...</div>
+      </div>
+    </div>
+    <div class="detail-tab-content" id="team-tab-results"></div>
+    <div class="detail-tab-content" id="team-tab-standings"></div>
+    <div class="detail-tab-content" id="team-tab-players"></div>
+    <div class="detail-tab-content" id="team-tab-statistics"></div>
+    <div class="detail-tab-content" id="team-tab-details"></div>
   `;
   
-  document.body.appendChild(modal);
-  
-  // Close modal
-  const closeBtn = modal.querySelector('.team-details-close');
-  closeBtn.addEventListener('click', () => {
-    modal.remove();
-  });
-  
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.remove();
-    }
-  });
-  
   // Tab switching
-  const tabs = modal.querySelectorAll('.team-details-tab');
-  const bodyContainer = modal.querySelector('.team-details-body');
-  
+  const tabs = content.querySelectorAll('.detail-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       
       const tabName = tab.dataset.tab;
-      loadTeamTab(team, tabName, bodyContainer);
+      
+      // Hide all tab contents
+      content.querySelectorAll('.detail-tab-content').forEach(tc => tc.classList.remove('active'));
+      
+      // Show selected tab content
+      const tabContent = content.querySelector(`#team-tab-${tabName}`);
+      tabContent.classList.add('active');
+      
+      // Load content if not already loaded
+      if (!tabContent.dataset.loaded) {
+        loadTeamTabContent(team, tabName, tabContent);
+      }
     });
   });
   
   // Load initial tab
-  loadTeamTab(team, 'fixtures', bodyContainer);
+  const initialTab = content.querySelector('#team-tab-fixtures');
+  loadTeamTabContent(team, 'fixtures', initialTab);
+}
+
+// Close team details view
+function closeTeamDetailsView() {
+  document.getElementById('team-details-view').classList.add('hidden');
+  document.getElementById('fixtures-view').classList.remove('hidden');
 }
 
 // Load team tab content
-async function loadTeamTab(team, tabName, container) {
+async function loadTeamTabContent(team, tabName, container) {
   container.innerHTML = `
-    <div class="team-details-loading">
+    <div class="loading-placeholder">
       <i class="fa-solid fa-spinner fa-spin"></i>
       <div>Loading ${tabName}...</div>
     </div>
@@ -2795,10 +2951,11 @@ async function loadTeamTab(team, tabName, container) {
         await renderTeamDetailsInfo(team, container);
         break;
     }
+    container.dataset.loaded = 'true';
   } catch (err) {
     console.error('Error loading team tab:', err);
     container.innerHTML = `
-      <div class="team-details-loading">
+      <div class="loading-placeholder">
         <i class="fa-solid fa-circle-exclamation"></i>
         <div>Failed to load ${tabName}. Please try again.</div>
       </div>
@@ -2818,12 +2975,42 @@ async function renderTeamFixtures(team, container) {
     
     const data = await response.json();
     console.log('Fixtures data received:', data);
+    console.log('Total fixtures:', data.fixtures?.length || 0);
     
     const fixtures = data.fixtures || [];
-    const upcoming = fixtures.filter(f => f.fixture.status.short === 'NS' || f.fixture.status.short === 'TBD').slice(0, 20);
+    
+    console.log('Total fixtures received:', fixtures.length);
+    
+    if (fixtures.length === 0) {
+      container.innerHTML = `
+        <div class="loading-placeholder">
+          <i class="fa-solid fa-info-circle"></i>
+          <div>No fixtures data available</div>
+          <div style="font-size: 11px; color: #7b8794; margin-top: 6px;">Season data may not be available yet</div>
+        </div>
+      `;
+      return;
+    }
+    
+    // Filter upcoming matches and sort by date (earliest first)
+    const upcoming = fixtures
+      .filter(f => f.fixture.status.short === 'NS' || f.fixture.status.short === 'TBD')
+      .sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date))
+      .slice(0, 20);
+    
+    console.log('Upcoming fixtures:', upcoming.length);
+    if (upcoming.length > 0) {
+      console.log('Next fixture date:', upcoming[0].fixture.date);
+    }
     
     if (upcoming.length === 0) {
-      container.innerHTML = '<div class="team-details-loading"><div>No upcoming fixtures available</div></div>';
+      container.innerHTML = `
+        <div class="loading-placeholder">
+          <i class="fa-solid fa-info-circle"></i>
+          <div>No upcoming fixtures</div>
+          <div style="font-size: 11px; color: #7b8794; margin-top: 6px;">All fixtures may have been completed</div>
+        </div>
+      `;
       return;
     }
     
@@ -2893,10 +3080,40 @@ async function renderTeamResults(team, container) {
     
     const data = await response.json();
     const fixtures = data.fixtures || [];
-    const results = fixtures.filter(f => f.fixture.status.short === 'FT').slice(0, 20);
+    
+    console.log('Total fixtures received:', fixtures.length);
+    
+    if (fixtures.length === 0) {
+      container.innerHTML = `
+        <div class="loading-placeholder">
+          <i class="fa-solid fa-info-circle"></i>
+          <div>No results data available</div>
+          <div style="font-size: 11px; color: #7b8794; margin-top: 6px;">Season data may not be available yet</div>
+        </div>
+      `;
+      return;
+    }
+    
+    // Filter finished matches and sort by date (newest first)
+    const results = fixtures
+      .filter(f => f.fixture.status.short === 'FT')
+      .sort((a, b) => new Date(b.fixture.date) - new Date(a.fixture.date))
+      .slice(0, 20);
+    
+    console.log('Finished matches found:', results.length);
+    if (results.length > 0) {
+      console.log('Latest result date:', results[0].fixture.date);
+      console.log('Oldest result date:', results[results.length - 1].fixture.date);
+    }
     
     if (results.length === 0) {
-      container.innerHTML = '<div class="team-details-loading"><div>No recent results available</div></div>';
+      container.innerHTML = `
+        <div class="loading-placeholder">
+          <i class="fa-solid fa-info-circle"></i>
+          <div>No recent results</div>
+          <div style="font-size: 11px; color: #7b8794; margin-top: 6px;">No completed matches found</div>
+        </div>
+      `;
       return;
     }
     
@@ -2922,6 +3139,36 @@ async function renderTeamResults(team, container) {
             const date = new Date(f.fixture.date);
             const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
             
+            // Determine result (W/D/L) from team's perspective
+            let result = '';
+            let resultClass = '';
+            const isHome = f.teams.home.id === team.id;
+            const isAway = f.teams.away.id === team.id;
+            
+            if (isHome) {
+              if (f.goals.home > f.goals.away) {
+                result = 'W';
+                resultClass = 'result-win';
+              } else if (f.goals.home < f.goals.away) {
+                result = 'L';
+                resultClass = 'result-loss';
+              } else {
+                result = 'D';
+                resultClass = 'result-draw';
+              }
+            } else if (isAway) {
+              if (f.goals.away > f.goals.home) {
+                result = 'W';
+                resultClass = 'result-win';
+              } else if (f.goals.away < f.goals.home) {
+                result = 'L';
+                resultClass = 'result-loss';
+              } else {
+                result = 'D';
+                resultClass = 'result-draw';
+              }
+            }
+            
             return `
               <div class="fixture-card">
                 <div class="fixture-date-time">
@@ -2938,6 +3185,7 @@ async function renderTeamResults(team, container) {
                     <span>${escapeHtml(f.teams.away.name)}</span>
                   </div>
                 </div>
+                ${result ? `<div class="fixture-result ${resultClass}">${result}</div>` : ''}
               </div>
             `;
           }).join('')}
@@ -3147,9 +3395,139 @@ function updateStandingsType(type, button) {
   renderStandingsTable(leagueIndex, type);
 }
 
+// Phase 2 functions removed - search/filter/sort functionality removed per user request
+
+// Toggle position group collapse/expand
+function togglePositionGroup(header) {
+  const mainSection = header.parentElement;
+  const subdivisions = mainSection.querySelector('.players-subdivisions');
+  const icon = header.querySelector('.position-toggle-icon');
+  
+  if (subdivisions.style.display === 'none') {
+    subdivisions.style.display = 'block';
+    icon.style.transform = 'rotate(0deg)';
+  } else {
+    subdivisions.style.display = 'none';
+    icon.style.transform = 'rotate(-90deg)';
+  }
+}
+
+// Global state for player data (Phase 3 modal only)
+let _currentTeamPlayers = [];
+let currentTeamData = null;
+let playerClickHandlerAttached = false;
+
+// Add getter/setter to track when currentTeamPlayers is modified
+Object.defineProperty(window, 'currentTeamPlayers', {
+  get: function() {
+    return _currentTeamPlayers;
+  },
+  set: function(value) {
+    console.log('🔄 currentTeamPlayers is being set:', value.length, 'players');
+    console.trace('Stack trace:');
+    _currentTeamPlayers = value;
+  }
+});
+
+// Event handler for player row clicks (using event delegation)
+function handlePlayerRowClick(e) {
+  console.log('=== handlePlayerRowClick triggered ===');
+  console.log('Event target:', e.target);
+  console.log('Event currentTarget:', e.currentTarget);
+  
+  // Find the closest player-row element
+  const playerRow = e.target.closest('.player-row');
+  
+  console.log('Found player row:', playerRow);
+  
+  if (!playerRow) {
+    console.log('Click was not on a player row, ignoring');
+    return; // Click was not on a player row
+  }
+  
+  const playerId = parseInt(playerRow.getAttribute('data-player-id'));
+  const playerName = playerRow.querySelector('.player-name-cell span')?.textContent || 'Unknown';
+  
+  console.log('=== PLAYER ROW CLICKED ===');
+  console.log('Player ID:', playerId);
+  console.log('Player Name:', playerName);
+  console.log('currentTeamPlayers length:', currentTeamPlayers.length);
+  
+  if (playerId) {
+    showPlayerDetails(playerId);
+  } else {
+    console.error('No player ID found on row');
+  }
+}
+
+// Set up global click handler for player rows
+function setupGlobalPlayerClickHandler() {
+  if (playerClickHandlerAttached) {
+    console.log('Global player click handler already attached');
+    return;
+  }
+  
+  console.log('=== Setting up GLOBAL player click handler ===');
+  
+  // Use event delegation on document body
+  document.body.addEventListener('click', function(e) {
+    // Check if click is within team details content (center column)
+    const teamDetailsContent = e.target.closest('#team-details-content');
+    if (!teamDetailsContent) {
+      return;
+    }
+    
+    // Check if click is on a player row
+    const playerRow = e.target.closest('.player-row');
+    if (!playerRow) {
+      return;
+    }
+    
+    console.log('=== PLAYER ROW CLICKED (Global Handler) ===');
+    console.log('Player row element:', playerRow);
+    
+    const playerIdStr = playerRow.getAttribute('data-player-id');
+    const playerId = parseInt(playerIdStr);
+    const playerName = playerRow.querySelector('.player-name-cell span')?.textContent || 'Unknown';
+    
+    console.log('Player ID string:', playerIdStr);
+    console.log('Player ID parsed:', playerId);
+    console.log('Player Name:', playerName);
+    console.log('currentTeamPlayers length:', currentTeamPlayers.length);
+    
+    if (!playerIdStr || isNaN(playerId) || playerId === 0) {
+      console.error('❌ ERROR: Invalid player ID!');
+      console.error('playerIdStr:', playerIdStr);
+      console.error('playerId:', playerId);
+      alert('Player ID is missing. This is a data issue. Please check the console for details.');
+      return;
+    }
+    
+    if (currentTeamPlayers.length === 0) {
+      console.error('❌ ERROR: No player data available!');
+      alert('Player data not loaded. Please switch to another tab and back to Players tab, then try again.');
+      return;
+    }
+    
+    console.log('✓ Calling showPlayerDetails with player ID:', playerId);
+    showPlayerDetails(playerId);
+  });
+  
+  playerClickHandlerAttached = true;
+  console.log('✓ Global player click handler attached');
+}
+
+// Initialize global handler on page load
+document.addEventListener('DOMContentLoaded', setupGlobalPlayerClickHandler);
+
 // Render team players
 async function renderTeamPlayers(team, container) {
   try {
+    console.log('=== renderTeamPlayers called ===');
+    console.log('Team:', team.name, 'ID:', team.id);
+    console.log('Container:', container);
+    console.log('Container class:', container.className);
+    
     const response = await fetch(`/api/teams/${team.id}/players`);
     const data = await response.json();
     
@@ -3160,188 +3538,49 @@ async function renderTeamPlayers(team, container) {
       return;
     }
     
+    // Store data globally for the click handler
+    currentTeamPlayers = data.players;
+    currentTeamData = team;
+    
     const players = data.players;
     console.log('Total players:', players.length);
+    console.log('✓ Stored currentTeamPlayers:', currentTeamPlayers.length);
+    console.log('✓ Stored currentTeamData:', currentTeamData.name);
     
-    // Log first player to see full structure
+    // Debug: Check first player structure
     if (players.length > 0) {
-      console.log('First player FULL DATA:', JSON.stringify(players[0], null, 2));
+      const firstPlayer = players[0];
+      console.log('First player object keys:', Object.keys(firstPlayer));
+      console.log('First player.player keys:', Object.keys(firstPlayer.player || {}));
+      console.log('First player.player.id:', firstPlayer.player?.id);
+      console.log('First player.player.name:', firstPlayer.player?.name);
+      
+      // Try to find the ID field
+      const playerObj = firstPlayer.player || {};
+      const possibleIdFields = ['id', 'player_id', 'playerId', 'ID', 'Id'];
+      for (const field of possibleIdFields) {
+        if (playerObj[field]) {
+          console.log(`Found ID in field "${field}":`, playerObj[field]);
+        }
+      }
     }
     
-    // Check if position is in statistics instead
-    const firstPlayerStats = players[0]?.statistics?.[0];
-    console.log('First player statistics:', firstPlayerStats);
-    console.log('Position in statistics?:', firstPlayerStats?.games?.position);
+    // Render players directly without filters
+    container.innerHTML = '';
+    renderPlayersContent(players, container);
     
-    // Map positions to standard names
-    const positionGroups = {
-      'Goalkeepers': [],
-      'Defenders': [],
-      'Midfielders': [],
-      'Attackers': []
-    };
+    console.log('✓ Players HTML rendered');
     
-    players.forEach(p => {
-      // Try to get position from statistics.games.position
-      const pos = p.statistics?.[0]?.games?.position || p.player?.position || '';
-      
-      // Also try common position name variations
-      const posLower = pos.toLowerCase();
-      
-      if (posLower.includes('goalkeeper') || pos === 'Goalkeeper') {
-        positionGroups['Goalkeepers'].push(p);
-      } else if (posLower.includes('defender') || pos === 'Defender') {
-        positionGroups['Defenders'].push(p);
-      } else if (posLower.includes('midfielder') || pos === 'Midfielder') {
-        positionGroups['Midfielders'].push(p);
-      } else if (posLower.includes('attacker') || posLower.includes('forward') || pos === 'Attacker') {
-        positionGroups['Attackers'].push(p);
-      } else {
-        // If no position match, log it
-        console.log(`Unknown position for ${p.player?.name}: "${pos}"`);
+    // Verify that player rows exist
+    setTimeout(() => {
+      const rows = container.querySelectorAll('.player-row');
+      console.log('✓ Verification: Found', rows.length, 'player rows in container');
+      if (rows.length > 0) {
+        console.log('First player row data-player-id:', rows[0].getAttribute('data-player-id'));
+        console.log('First player name:', rows[0].querySelector('.player-name-cell span')?.textContent);
       }
-    });
-    
-    console.log('Position groups:', {
-      Goalkeepers: positionGroups['Goalkeepers'].length,
-      Defenders: positionGroups['Defenders'].length,
-      Midfielders: positionGroups['Midfielders'].length,
-      Attackers: positionGroups['Attackers'].length
-    });
-    
-    let html = '<div class="players-content">';
-    
-    // Render each position group
-    Object.entries(positionGroups).forEach(([position, playersList]) => {
-      if (playersList.length > 0) {
-        html += `
-          <div class="players-section">
-            <h3>${position}</h3>
-            <table class="players-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Age</th>
-                  <th><img src="/images/icons/football-jersey.svg" alt="Jersey" style="width: 20px; height: 20px;"></th>
-                  <th><img src="/images/icons/goal.svg" alt="Goals" style="width: 20px; height: 20px;"></th>
-                  <th><img src="/images/icons/football-assist.svg" alt="Assists" style="width: 20px; height: 20px;"></th>
-                  <th><img src="/images/icons/yellow-card.svg" alt="Yellow Cards" style="width: 14px; height: 18px;"></th>
-                  <th><img src="/images/icons/red-card.svg" alt="Red Cards" style="width: 14px; height: 18px;"></th>
-                </tr>
-              </thead>
-              <tbody>`;
-        
-        playersList.forEach(p => {
-          try {
-            // Try to find statistics with jersey number
-            let stats = null;
-            if (p.statistics && p.statistics.length > 0) {
-              // First, try to find a stat with a jersey number
-              stats = p.statistics.find(s => s.games && s.games.number) || p.statistics[0];
-            } else {
-              stats = {};
-            }
-            
-            const games = stats.games || {};
-            const goals = stats.goals || {};
-            const cards = stats.cards || {};
-            const playerName = p.player.name || 'Unknown';
-            const playerNationality = p.player.nationality || '';
-            
-            // Try to get jersey number from multiple sources
-            let jerseyNumber = games.number || p.player.number || '-';
-            
-            // Debug: log if no number found
-            if (jerseyNumber === '-') {
-              console.log(`No jersey number for ${playerName}:`, {
-                'games.number': games.number,
-                'player.number': p.player.number,
-                'all statistics': p.statistics?.map(s => ({ league: s.league?.name, number: s.games?.number }))
-              });
-            }
-            
-            // Get country flag URL (using flagcdn.com API)
-            const countryCode = getCountryCode(playerNationality);
-            const flagUrl = countryCode ? `https://flagcdn.com/w40/${countryCode}.png` : '';
-            
-            // Debug: log if no flag
-            if (!flagUrl && playerNationality) {
-              console.log(`No flag for nationality: "${playerNationality}"`);
-            }
-            
-            html += `
-              <tr>
-                <td>
-                  <div class="player-name-cell">
-                    <img src="${p.player.photo}" class="player-photo" onerror="this.src='https://via.placeholder.com/32'">
-                    ${flagUrl ? `<img src="${flagUrl}" class="player-flag" alt="${playerNationality}" onerror="this.style.display='none'">` : ''}
-                    <span>${playerName}</span>
-                  </div>
-                </td>
-                <td>${p.player.age || '-'}</td>
-                <td><strong>${jerseyNumber}</strong></td>
-                <td>${goals.total || 0}</td>
-                <td>${goals.assists || 0}</td>
-                <td>${cards.yellow || 0}</td>
-                <td>${cards.red || 0}</td>
-              </tr>
-            `;
-          } catch (playerErr) {
-            console.error('Error rendering player:', playerErr);
-          }
-        });
-        
-        html += `
-              </tbody>
-            </table>
-          </div>
-        `;
-      }
-    });
-    
-    // Add coach section
-    html += `
-      <div class="players-section">
-        <h3>Coach</h3>
-        <div class="coach-info">
-          <div class="coach-loading">Loading coach information...</div>
-        </div>
-      </div>
-    `;
-    
-    html += '</div>';
-    
-    console.log('Setting players HTML, length:', html.length);
-    container.innerHTML = html;
-    
-    // Fetch and display coach info
-    try {
-      const coachResponse = await fetch(`/api/teams/${team.id}/info`);
-      const coachData = await coachResponse.json();
-      
-      const coachDiv = container.querySelector('.coach-info');
-      if (coachData.team && coachData.team.coach) {
-        const coach = coachData.team.coach;
-        coachDiv.innerHTML = `
-          <div class="coach-card">
-            <img src="${coach.photo}" class="coach-photo" onerror="this.src='https://via.placeholder.com/64'">
-            <div class="coach-details">
-              <div class="coach-name">${coach.name || 'Unknown'}</div>
-              <div class="coach-meta">
-                <span>${coach.nationality || 'Unknown'}</span>
-                ${coach.age ? `<span> • ${coach.age} years old</span>` : ''}
-              </div>
-            </div>
-          </div>
-        `;
-      } else {
-        coachDiv.innerHTML = '<div class="coach-loading">No coach information available</div>';
-      }
-    } catch (coachErr) {
-      console.error('Error loading coach:', coachErr);
-    }
-    
-    console.log('Players HTML set successfully');
+      console.log('✓ Global click handler is active, clicks should work now');
+    }, 100);
   } catch (err) {
     console.error('Error loading team players:', err);
     container.innerHTML = '<div class="team-details-loading"><div>Failed to load players: ' + err.message + '</div></div>';
@@ -3611,5 +3850,512 @@ async function renderTeamStatistics(team, container) {
   } catch (err) {
     console.error('Error loading team statistics:', err);
     container.innerHTML = '<div class="team-details-loading"><div>Failed to load statistics</div></div>';
+  }
+}
+// ============================================
+// PHASE 2 & 3: ADD THESE FUNCTIONS TO THE END OF main.js
+// ============================================
+
+// Duplicate Phase 2 functions removed - see above for comment
+
+function renderPlayersContent(players, container) {
+  const positionGroups = {
+    'Goalkeepers': { 'GK': [] },
+    'Defenders': { 'CB': [], 'LB': [], 'RB': [] },
+    'Midfielders': { 'CDM': [], 'CM': [], 'CAM': [] },
+    'Attackers': { 'LW': [], 'RW': [], 'ST': [] }
+  };
+  
+  players.forEach(p => {
+    const pos = p.statistics?.[0]?.games?.position || p.player?.position || '';
+    const posUpper = pos.toUpperCase();
+    
+    if (posUpper.includes('GK') || posUpper.includes('GOALKEEPER')) {
+      positionGroups['Goalkeepers']['GK'].push(p);
+    } else if (posUpper.includes('CB') || posUpper === 'CENTRE-BACK' || posUpper === 'CENTER-BACK') {
+      positionGroups['Defenders']['CB'].push(p);
+    } else if (posUpper.includes('LB') || posUpper === 'LEFT-BACK' || posUpper.includes('LEFT BACK')) {
+      positionGroups['Defenders']['LB'].push(p);
+    } else if (posUpper.includes('RB') || posUpper === 'RIGHT-BACK' || posUpper.includes('RIGHT BACK')) {
+      positionGroups['Defenders']['RB'].push(p);
+    } else if (posUpper.includes('DEFENDER')) {
+      positionGroups['Defenders']['CB'].push(p);
+    } else if (posUpper.includes('CDM') || posUpper === 'DEFENSIVE MIDFIELD') {
+      positionGroups['Midfielders']['CDM'].push(p);
+    } else if (posUpper.includes('CAM') || posUpper === 'ATTACKING MIDFIELD') {
+      positionGroups['Midfielders']['CAM'].push(p);
+    } else if (posUpper.includes('CM') || posUpper.includes('CENTRAL MIDFIELD') || posUpper.includes('MIDFIELDER')) {
+      positionGroups['Midfielders']['CM'].push(p);
+    } else if (posUpper.includes('LW') || posUpper.includes('LEFT WING')) {
+      positionGroups['Attackers']['LW'].push(p);
+    } else if (posUpper.includes('RW') || posUpper.includes('RIGHT WING')) {
+      positionGroups['Attackers']['RW'].push(p);
+    } else if (posUpper.includes('ST') || posUpper.includes('STRIKER') || posUpper.includes('FORWARD') || posUpper.includes('ATTACKER') || posUpper.includes('CF')) {
+      positionGroups['Attackers']['ST'].push(p);
+    } else {
+      positionGroups['Midfielders']['CM'].push(p);
+    }
+  });
+  
+  let html = '<div class="players-content">';
+  
+  Object.entries(positionGroups).forEach(([mainPosition, subPositions]) => {
+    const totalPlayers = Object.values(subPositions).reduce((sum, players) => sum + players.length, 0);
+    
+    if (totalPlayers > 0) {
+      html += `
+        <div class="players-main-section">
+          <div class="players-main-header" onclick="togglePositionGroup(this)">
+            <div class="players-main-title">
+              <i class="fa-solid fa-chevron-down position-toggle-icon"></i>
+              <span>${mainPosition}</span>
+              <span class="player-count">(${totalPlayers})</span>
+            </div>
+          </div>
+          <div class="players-subdivisions">`;
+      
+      Object.entries(subPositions).forEach(([subPosition, playersList]) => {
+        if (playersList.length > 0) {
+          html += `
+            <div class="players-section">
+              <div class="players-sub-header">
+                <span class="sub-position-name">${subPosition}</span>
+                <span class="sub-player-count">${playersList.length} player${playersList.length > 1 ? 's' : ''}</span>
+              </div>
+              <table class="players-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Age</th>
+                    <th><img src="/images/icons/football-jersey.svg" alt="Jersey" style="width: 20px; height: 20px;"></th>
+                    <th title="Rating">Rating</th>
+                    <th title="Minutes">Min</th>
+                    <th title="Lineups">Lineups</th>
+                    <th><img src="/images/icons/goal.svg" alt="Goals" style="width: 20px; height: 20px;"></th>
+                    <th><img src="/images/icons/football-assist.svg" alt="Assists" style="width: 20px; height: 20px;"></th>
+                    <th title="Goals per 90 minutes">G/90</th>
+                    <th title="Assists per 90 minutes">A/90</th>
+                    <th title="Shots">Shots</th>
+                    <th title="Pass%">Pass%</th>
+                    <th title="Tackles">Tackles</th>
+                    <th><img src="/images/icons/yellow-card.svg" alt="Yellow" style="width: 14px; height: 18px;"></th>
+                    <th><img src="/images/icons/red-card.svg" alt="Red" style="width: 14px; height: 18px;"></th>
+                  </tr>
+                </thead>
+                <tbody>`;
+          
+          playersList.forEach(p => {
+            try {
+              let stats = p.statistics?.find(s => s.games && s.games.number) || p.statistics?.[0] || {};
+              const games = stats.games || {};
+              const goals = stats.goals || {};
+              const cards = stats.cards || {};
+              const shots = stats.shots || {};
+              const passes = stats.passes || {};
+              const tackles = stats.tackles || {};
+              
+              const playerName = p.player.name || 'Unknown';
+              const playerNationality = p.player.nationality || '';
+              const jerseyNumber = games.number || p.player.number || '-';
+              const countryCode = getCountryCode(playerNationality);
+              const flagUrl = countryCode ? `https://flagcdn.com/w40/${countryCode}.png` : '';
+              
+              // Improved Rating display
+              let ratingDisplay = '-';
+              let ratingClass = '';
+              let ratingTitle = '';
+              
+              if (games.rating) {
+                const ratingValue = parseFloat(games.rating);
+                ratingDisplay = ratingValue.toFixed(1);
+                if (ratingValue >= 7.5) {
+                  ratingClass = 'rating-excellent';
+                } else if (ratingValue >= 7.0) {
+                  ratingClass = 'rating-good';
+                } else if (ratingValue >= 6.5) {
+                  ratingClass = 'rating-average';
+                } else {
+                  ratingClass = 'rating-poor';
+                }
+              } else {
+                // Show reason for no rating
+                const appearances = games.appearences || 0;
+                const minutes = games.minutes || 0;
+                
+                if (appearances === 0) {
+                  ratingDisplay = '-';
+                  ratingTitle = 'No appearances this season';
+                  ratingClass = 'rating-no-data';
+                } else if (minutes < 45) {
+                  ratingDisplay = '-';
+                  ratingTitle = 'Insufficient playing time';
+                  ratingClass = 'rating-no-data';
+                } else {
+                  ratingDisplay = '-';
+                  ratingTitle = 'Rating not available';
+                  ratingClass = 'rating-no-data';
+                }
+              }
+              
+              const shotsDisplay = shots.total ? `${shots.total}${shots.on ? '/' + shots.on : ''}` : '-';
+              const passAccuracy = passes.accuracy ? `${passes.accuracy.toFixed(0)}%` : '-';
+              
+              // Calculate per 90 minutes stats
+              const minutes = games.minutes || 0;
+              let goalsPer90 = '-';
+              let assistsPer90 = '-';
+              
+              if (minutes >= 90) {
+                const goalsTotal = goals.total || 0;
+                const assistsTotal = goals.assists || 0;
+                goalsPer90 = ((goalsTotal / minutes) * 90).toFixed(2);
+                assistsPer90 = ((assistsTotal / minutes) * 90).toFixed(2);
+              }
+              
+              // Captain badge
+              const isCaptain = games.captain || false;
+              const captainBadge = isCaptain ? '<span class="captain-badge" title="Team Captain">⭐</span>' : '';
+              
+              // Ensure player ID exists
+              const playerId = p.player?.id || p.player?.player_id || 0;
+              if (!playerId) {
+                console.warn('Player without ID:', p.player?.name);
+              }
+              
+              html += `
+                <tr data-player-id="${playerId}" class="player-row">
+                  <td>
+                    <div class="player-name-cell">
+                      <img src="${p.player.photo}" class="player-photo" onerror="this.src='https://via.placeholder.com/32'">
+                      ${flagUrl ? `<img src="${flagUrl}" class="player-flag" alt="${playerNationality}" onerror="this.style.display='none'">` : ''}
+                      <span>${playerName}</span>
+                      ${captainBadge}
+                    </div>
+                  </td>
+                  <td>${p.player.age || '-'}</td>
+                  <td><strong>${jerseyNumber}</strong></td>
+                  <td><span class="player-rating ${ratingClass}" title="${ratingTitle}">${ratingDisplay}</span></td>
+                  <td>${games.minutes || 0}</td>
+                  <td>${games.lineups || 0}</td>
+                  <td>${goals.total || 0}</td>
+                  <td>${goals.assists || 0}</td>
+                  <td class="per90-stat">${goalsPer90}</td>
+                  <td class="per90-stat">${assistsPer90}</td>
+                  <td>${shotsDisplay}</td>
+                  <td>${passAccuracy}</td>
+                  <td>${tackles.total || 0}</td>
+                  <td>${cards.yellow || 0}</td>
+                  <td>${cards.red || 0}</td>
+                </tr>
+              `;
+            } catch (playerErr) {
+              console.error('Error rendering player:', playerErr);
+            }
+          });
+          
+          html += `</tbody></table></div>`;
+        }
+      });
+      
+      html += `</div></div>`;
+    }
+  });
+  
+  if (players.length === 0) {
+    html += '<div class="no-players-found"><i class="fa-solid fa-search"></i><p>No players found matching your filters</p></div>';
+  }
+  
+  html += '</div>';
+  container.insertAdjacentHTML('beforeend', html);
+  
+  console.log('=== Setting up event delegation for player clicks ===');
+  console.log('Container:', container);
+}
+
+// PHASE 3: Player Details in Center Column (not modal)
+function showPlayerDetails(playerId) {
+  console.log('showPlayerDetails called with playerId:', playerId);
+  console.log('currentTeamPlayers array:', currentTeamPlayers);
+  console.log('Looking for player with ID:', playerId);
+  
+  const player = currentTeamPlayers.find(p => p.player.id === playerId);
+  if (!player) {
+    console.error('Player not found:', playerId);
+    console.log('Available player IDs:', currentTeamPlayers.map(p => p.player.id));
+    return;
+  }
+  
+  console.log('Found player:', player.player.name, 'ID:', player.player.id);
+  
+  // Hide other views
+  document.getElementById('fixtures-view').classList.add('hidden');
+  document.getElementById('league-page').classList.add('hidden');
+  document.getElementById('team-details-view').classList.add('hidden');
+  
+  // Show player details view
+  const playerView = document.getElementById('player-details-view');
+  playerView.classList.remove('hidden');
+  
+  const stats = player.statistics?.[0] || {};
+  const games = stats.games || {};
+  const goals = stats.goals || {};
+  const shots = stats.shots || {};
+  const passes = stats.passes || {};
+  const tackles = stats.tackles || {};
+  const cards = stats.cards || {};
+  const penalty = stats.penalty || {};
+  
+  const content = document.getElementById('player-details-content');
+  content.innerHTML = `
+    <div class="player-detail-header">
+      <img src="${player.player.photo}" class="player-detail-photo" onerror="this.src='https://via.placeholder.com/120'">
+      <div class="player-detail-info">
+        <h1>${player.player.name}</h1>
+        <div class="player-detail-meta">
+          <span><i class="fa-solid fa-shirt"></i> #${games.number || '-'}</span>
+          <span><i class="fa-solid fa-location-dot"></i> ${games.position || '-'}</span>
+          <span><i class="fa-solid fa-calendar"></i> ${player.player.age || '-'} years</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="detail-section">
+      <h3><i class="fa-solid fa-user"></i> Personal Information</h3>
+      <div class="player-info-grid">
+        <div class="player-info-item">
+          <span class="label">Full Name</span>
+          <span class="value">${player.player.firstname || ''} ${player.player.lastname || ''}</span>
+        </div>
+        <div class="player-info-item">
+          <span class="label">Nationality</span>
+          <span class="value">${player.player.nationality || '-'}</span>
+        </div>
+        <div class="player-info-item">
+          <span class="label">Date of Birth</span>
+          <span class="value">${player.player.birth?.date || '-'}</span>
+        </div>
+        <div class="player-info-item">
+          <span class="label">Place of Birth</span>
+          <span class="value">${
+            (() => {
+              const place = player.player.birth?.place;
+              const country = player.player.birth?.country;
+              if (place && place !== 'Unknown' && country) {
+                return `${place}, ${country}`;
+              } else if (country) {
+                return country;
+              } else {
+                return '-';
+              }
+            })()
+          }</span>
+        </div>
+        <div class="player-info-item">
+          <span class="label">Height</span>
+          <span class="value">${player.player.height || '-'}</span>
+        </div>
+        <div class="player-info-item">
+          <span class="label">Weight</span>
+          <span class="value">${player.player.weight || '-'}</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="detail-section">
+      <h3><i class="fa-solid fa-chart-bar"></i> Season Statistics</h3>
+      <div class="player-stats-grid">
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-futbol"></i></div>
+          <div class="stat-value">${games.appearences || 0}</div>
+          <div class="stat-label">Appearances</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-play"></i></div>
+          <div class="stat-value">${games.lineups || 0}</div>
+          <div class="stat-label">Lineups</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-clock"></i></div>
+          <div class="stat-value">${games.minutes || 0}</div>
+          <div class="stat-label">Minutes</div>
+        </div>
+        <div class="stat-box ${games.rating >= 7.5 ? 'stat-excellent' : games.rating >= 7.0 ? 'stat-good' : 'stat-average'}">
+          <div class="stat-icon"><i class="fa-solid fa-star"></i></div>
+          <div class="stat-value">${games.rating ? parseFloat(games.rating).toFixed(2) : '-'}</div>
+          <div class="stat-label">Rating</div>
+        </div>
+      </div>
+      
+      <div class="player-stats-grid">
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-bullseye"></i></div>
+          <div class="stat-value">${goals.total || 0}</div>
+          <div class="stat-label">Goals</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-hands-helping"></i></div>
+          <div class="stat-value">${goals.assists || 0}</div>
+          <div class="stat-label">Assists</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-crosshairs"></i></div>
+          <div class="stat-value">${shots.total || 0} / ${shots.on || 0}</div>
+          <div class="stat-label">Shots / On Target</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-percentage"></i></div>
+          <div class="stat-value">${shots.accuracy ? shots.accuracy + '%' : '-'}</div>
+          <div class="stat-label">Shot Accuracy</div>
+        </div>
+      </div>
+      
+      <div class="player-stats-grid">
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-exchange-alt"></i></div>
+          <div class="stat-value">${passes.total || 0}</div>
+          <div class="stat-label">Passes</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-check-circle"></i></div>
+          <div class="stat-value">${passes.accuracy ? passes.accuracy + '%' : '-'}</div>
+          <div class="stat-label">Pass Accuracy</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-key"></i></div>
+          <div class="stat-value">${passes.key || 0}</div>
+          <div class="stat-label">Key Passes</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-shield-alt"></i></div>
+          <div class="stat-value">${tackles.total || 0}</div>
+          <div class="stat-label">Tackles</div>
+        </div>
+      </div>
+      
+      <div class="player-stats-grid">
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-hand-paper"></i></div>
+          <div class="stat-value">${tackles.blocks || 0}</div>
+          <div class="stat-label">Blocks</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-icon"><i class="fa-solid fa-cut"></i></div>
+          <div class="stat-value">${tackles.interceptions || 0}</div>
+          <div class="stat-label">Interceptions</div>
+        </div>
+        <div class="stat-box stat-warning">
+          <div class="stat-icon"><i class="fa-solid fa-square"></i></div>
+          <div class="stat-value">${cards.yellow || 0}</div>
+          <div class="stat-label">Yellow Cards</div>
+        </div>
+        <div class="stat-box stat-danger">
+          <div class="stat-icon"><i class="fa-solid fa-square"></i></div>
+          <div class="stat-value">${cards.red || 0}</div>
+          <div class="stat-label">Red Cards</div>
+        </div>
+      </div>
+      
+      ${penalty.scored || penalty.missed ? `
+        <div class="player-stats-grid">
+          <div class="stat-box">
+            <div class="stat-icon"><i class="fa-solid fa-circle-dot"></i></div>
+            <div class="stat-value">${penalty.scored || 0}</div>
+            <div class="stat-label">Penalties Scored</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-icon"><i class="fa-solid fa-times-circle"></i></div>
+            <div class="stat-value">${penalty.missed || 0}</div>
+            <div class="stat-label">Penalties Missed</div>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+    
+    <div class="detail-section" id="player-transfers-section">
+      <h3><i class="fa-solid fa-exchange-alt"></i> Transfer History</h3>
+      <div id="player-transfers-content">
+        <div class="loading-placeholder">Loading transfer history...</div>
+      </div>
+    </div>
+  `;
+  
+  // Load transfer history asynchronously
+  loadPlayerTransfers(playerId);
+}
+
+// Close player details view
+function closePlayerDetailsView() {
+  document.getElementById('player-details-view').classList.add('hidden');
+  document.getElementById('team-details-view').classList.remove('hidden');
+}
+
+async function loadPlayerTransfers(playerId) {
+  try {
+    const response = await fetch(`/api/players/${playerId}/transfers`);
+    const data = await response.json();
+    
+    const transfersContent = document.getElementById('player-transfers-content');
+    
+    if (!data.transfers || data.transfers.length === 0) {
+      transfersContent.innerHTML = '<div class="no-data-message"><i class="fa-solid fa-info-circle"></i> No transfer history available</div>';
+      return;
+    }
+    
+    // Sort transfers by date (newest first)
+    const transfers = data.transfers.sort((a, b) => {
+      const dateA = new Date(a.date || 0);
+      const dateB = new Date(b.date || 0);
+      return dateB - dateA;
+    });
+    
+    let html = '<div class="transfers-timeline">';
+    
+    transfers.forEach((transfer, index) => {
+      const transferDate = transfer.date ? new Date(transfer.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown date';
+      const fromTeam = transfer.from?.name || 'Unknown';
+      const toTeam = transfer.to?.name || 'Unknown';
+      const transferType = transfer.type?.name || 'Transfer';
+      const transferFee = transfer.amount ? `€${(transfer.amount / 1000000).toFixed(1)}M` : 'Free';
+      
+      // Skip transfers where both teams are unknown
+      if (fromTeam === 'Unknown' && toTeam === 'Unknown') {
+        return;
+      }
+      
+      html += `
+        <div class="transfer-item">
+          <div class="transfer-date">${transferDate}</div>
+          <div class="transfer-details">
+            <div class="transfer-teams">
+              <span class="transfer-from">${escapeHtml(fromTeam === 'Unknown' ? '—' : fromTeam)}</span>
+              <i class="fa-solid fa-arrow-right transfer-arrow"></i>
+              <span class="transfer-to">${escapeHtml(toTeam === 'Unknown' ? '—' : toTeam)}</span>
+            </div>
+            <div class="transfer-meta">
+              <span class="transfer-type">${escapeHtml(transferType)}</span>
+              <span class="transfer-fee">${transferFee}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+    transfersContent.innerHTML = html;
+    
+  } catch (err) {
+    console.error('Error loading transfers:', err);
+    const transfersContent = document.getElementById('player-transfers-content');
+    if (transfersContent) {
+      transfersContent.innerHTML = '<div class="error-message"><i class="fa-solid fa-exclamation-triangle"></i> Failed to load transfer history</div>';
+    }
+  }
+}
+
+function closePlayerModal() {
+  const modal = document.querySelector('.player-modal-overlay');
+  if (modal) {
+    modal.remove();
+    document.body.style.overflow = '';
   }
 }
