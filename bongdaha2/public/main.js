@@ -2720,6 +2720,7 @@ function showTeamDetails(team) {
         <button class="team-details-tab" data-tab="results">Recent Result</button>
         <button class="team-details-tab" data-tab="standings">Standings</button>
         <button class="team-details-tab" data-tab="players">Players</button>
+        <button class="team-details-tab" data-tab="statistics">Statistics</button>
         <button class="team-details-tab" data-tab="details">Details</button>
       </div>
       
@@ -2786,6 +2787,9 @@ async function loadTeamTab(team, tabName, container) {
         break;
       case 'players':
         await renderTeamPlayers(team, container);
+        break;
+      case 'statistics':
+        await renderTeamStatistics(team, container);
         break;
       case 'details':
         await renderTeamDetailsInfo(team, container);
@@ -3351,56 +3355,261 @@ async function renderTeamDetailsInfo(team, container) {
     const data = await response.json();
     
     const teamInfo = data.team || {};
-    const venue = teamInfo.venue || {};
+    const venue = data.venue || {};
     
     let html = `
-      <div class="team-info-grid">
-        <div class="team-info-card">
-          <h4>Team Info</h4>
-          <div class="team-info-row">
-            <span class="team-info-label">Founded</span>
-            <span class="team-info-value">${teamInfo.founded || 'Unknown'}</span>
-          </div>
-          <div class="team-info-row">
-            <span class="team-info-label">Country</span>
-            <span class="team-info-value">${escapeHtml(teamInfo.country || 'Unknown')}</span>
-          </div>
-          <div class="team-info-row">
-            <span class="team-info-label">National</span>
-            <span class="team-info-value">${teamInfo.national ? 'Yes' : 'No'}</span>
+      <div class="team-info-container">
+        <!-- Team Basic Info -->
+        <div class="team-info-section">
+          <h3 class="team-info-section-title">
+            <i class="fa-solid fa-shield-halved"></i> Team Information
+          </h3>
+          <div class="team-info-grid">
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-calendar"></i> Founded</span>
+              <span class="team-info-value">${teamInfo.founded || 'Unknown'}</span>
+            </div>
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-flag"></i> Country</span>
+              <span class="team-info-value">${escapeHtml(teamInfo.country || 'Unknown')}</span>
+            </div>
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-code"></i> Team Code</span>
+              <span class="team-info-value">${escapeHtml(teamInfo.code || 'N/A')}</span>
+            </div>
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-building"></i> Type</span>
+              <span class="team-info-value">${teamInfo.national ? 'National Team' : 'Club Team'}</span>
+            </div>
           </div>
         </div>
-        
-        <div class="team-info-card">
-          <h4>Venue</h4>
-          <div class="team-info-row">
-            <span class="team-info-label">Name</span>
-            <span class="team-info-value">${escapeHtml(venue.name || 'Unknown')}</span>
+
+        <!-- Venue Information -->
+        <div class="team-info-section">
+          <h3 class="team-info-section-title">
+            <i class="fa-solid fa-location-dot"></i> Stadium Information
+          </h3>
+          <div class="team-info-grid">
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-building-columns"></i> Stadium Name</span>
+              <span class="team-info-value">${escapeHtml(venue.name || 'Unknown')}</span>
+            </div>
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-city"></i> City</span>
+              <span class="team-info-value">${escapeHtml(venue.city || 'Unknown')}</span>
+            </div>
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-users"></i> Capacity</span>
+              <span class="team-info-value">${venue.capacity ? venue.capacity.toLocaleString() : 'Unknown'}</span>
+            </div>
+            <div class="team-info-item">
+              <span class="team-info-label"><i class="fa-solid fa-seedling"></i> Surface</span>
+              <span class="team-info-value">${escapeHtml(venue.surface || 'Unknown')}</span>
+            </div>
+            ${venue.address ? `
+              <div class="team-info-item team-info-item-full">
+                <span class="team-info-label"><i class="fa-solid fa-map-marker-alt"></i> Address</span>
+                <span class="team-info-value">${escapeHtml(venue.address)}</span>
+              </div>
+            ` : ''}
           </div>
-          <div class="team-info-row">
-            <span class="team-info-label">City</span>
-            <span class="team-info-value">${escapeHtml(venue.city || 'Unknown')}</span>
-          </div>
-          <div class="team-info-row">
-            <span class="team-info-label">Capacity</span>
-            <span class="team-info-value">${venue.capacity ? venue.capacity.toLocaleString() : 'Unknown'}</span>
-          </div>
+          
+          ${venue.image ? `
+            <div class="venue-image-container">
+              <img src="${venue.image}" alt="${escapeHtml(venue.name)}" class="venue-image">
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
-    
-    // Add venue image if available
-    if (venue.image) {
-      html += `
-        <div style="margin-top: 20px;">
-          <img src="${venue.image}" style="width: 100%; border-radius: 8px; max-height: 400px; object-fit: cover;">
-        </div>
-      `;
-    }
     
     container.innerHTML = html;
   } catch (err) {
     console.error('Error loading team details:', err);
     container.innerHTML = '<div class="team-details-loading"><div>Failed to load team details</div></div>';
+  }
+}
+
+// Render team statistics
+async function renderTeamStatistics(team, container) {
+  try {
+    const response = await fetch(`/api/teams/${team.id}/statistics`);
+    const data = await response.json();
+    
+    if (!data.statistics || !data.statistics.details) {
+      container.innerHTML = '<div class="team-details-loading"><div>No statistics available</div></div>';
+      return;
+    }
+    
+    const details = data.statistics.details;
+    
+    // Helper function to find stat by type_id
+    const findStat = (typeId) => details.find(d => d.type_id === typeId);
+    
+    // Extract key statistics
+    const goals = findStat(52); // Goals
+    const goalsConceded = findStat(88); // Goals Conceded
+    const cleanSheets = findStat(214); // Clean Sheets
+    const failedToScore = findStat(216); // Failed to Score
+    const btts = findStat(215); // Both Teams to Score
+    const penalties = findStat(47); // Penalties
+    const scoringMinutes = findStat(196); // Scoring Minutes
+    const concededMinutes = findStat(213); // Conceded Scoring Minutes
+    
+    let html = `
+      <div class="team-stats-container">
+        <!-- Goals Statistics -->
+        ${goals ? `
+          <div class="stats-section">
+            <h3 class="stats-section-title">
+              <i class="fa-solid fa-futbol"></i> Goals Scored
+            </h3>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Total</div>
+                <div class="stat-value">${goals.value.all?.count || 0}</div>
+                <div class="stat-sublabel">Avg: ${goals.value.all?.average?.toFixed(2) || 0} per game</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Home</div>
+                <div class="stat-value">${goals.value.home?.count || 0}</div>
+                <div class="stat-sublabel">${goals.value.home?.percentage?.toFixed(1) || 0}%</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Away</div>
+                <div class="stat-value">${goals.value.away?.count || 0}</div>
+                <div class="stat-sublabel">${goals.value.away?.percentage?.toFixed(1) || 0}%</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Goals Conceded Statistics -->
+        ${goalsConceded ? `
+          <div class="stats-section">
+            <h3 class="stats-section-title">
+              <i class="fa-solid fa-shield"></i> Goals Conceded
+            </h3>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Total</div>
+                <div class="stat-value">${goalsConceded.value.all?.count || 0}</div>
+                <div class="stat-sublabel">Avg: ${goalsConceded.value.all?.average?.toFixed(2) || 0} per game</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Home</div>
+                <div class="stat-value">${goalsConceded.value.home?.count || 0}</div>
+                <div class="stat-sublabel">${goalsConceded.value.home?.percentage?.toFixed(1) || 0}%</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Away</div>
+                <div class="stat-value">${goalsConceded.value.away?.count || 0}</div>
+                <div class="stat-sublabel">${goalsConceded.value.away?.percentage?.toFixed(1) || 0}%</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Match Results -->
+        ${cleanSheets || failedToScore || btts ? `
+          <div class="stats-section">
+            <h3 class="stats-section-title">
+              <i class="fa-solid fa-chart-simple"></i> Match Results
+            </h3>
+            <div class="stats-grid">
+              ${cleanSheets ? `
+                <div class="stat-card stat-card-success">
+                  <div class="stat-label">Clean Sheets</div>
+                  <div class="stat-value">${cleanSheets.value.all?.count || 0}</div>
+                  <div class="stat-sublabel">${cleanSheets.value.all?.percentage?.toFixed(1) || 0}% of matches</div>
+                </div>
+              ` : ''}
+              ${failedToScore ? `
+                <div class="stat-card stat-card-danger">
+                  <div class="stat-label">Failed to Score</div>
+                  <div class="stat-value">${failedToScore.value.all?.count || 0}</div>
+                  <div class="stat-sublabel">${failedToScore.value.all?.percentage?.toFixed(1) || 0}% of matches</div>
+                </div>
+              ` : ''}
+              ${btts ? `
+                <div class="stat-card">
+                  <div class="stat-label">Both Teams Scored</div>
+                  <div class="stat-value">${btts.value.all?.count || 0}</div>
+                  <div class="stat-sublabel">${btts.value.all?.percentage?.toFixed(1) || 0}% of matches</div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Penalties -->
+        ${penalties ? `
+          <div class="stats-section">
+            <h3 class="stats-section-title">
+              <i class="fa-solid fa-circle-dot"></i> Penalties
+            </h3>
+            <div class="stats-grid">
+              <div class="stat-card stat-card-success">
+                <div class="stat-label">Scored</div>
+                <div class="stat-value">${penalties.value.scored || 0}</div>
+              </div>
+              <div class="stat-card stat-card-danger">
+                <div class="stat-label">Missed</div>
+                <div class="stat-value">${penalties.value.missed || 0}</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Conversion Rate</div>
+                <div class="stat-value">${penalties.value.conversion_rate || 0}%</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Scoring Minutes -->
+        ${scoringMinutes ? `
+          <div class="stats-section">
+            <h3 class="stats-section-title">
+              <i class="fa-solid fa-clock"></i> When Goals Are Scored
+            </h3>
+            <div class="time-distribution">
+              ${Object.entries(scoringMinutes.value).map(([period, data]) => `
+                <div class="time-bar">
+                  <div class="time-label">${period} min</div>
+                  <div class="time-bar-container">
+                    <div class="time-bar-fill" style="width: ${data.percentage}%"></div>
+                  </div>
+                  <div class="time-value">${data.count} (${data.percentage.toFixed(1)}%)</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Conceded Minutes -->
+        ${concededMinutes ? `
+          <div class="stats-section">
+            <h3 class="stats-section-title">
+              <i class="fa-solid fa-clock"></i> When Goals Are Conceded
+            </h3>
+            <div class="time-distribution">
+              ${Object.entries(concededMinutes.value).map(([period, data]) => `
+                <div class="time-bar">
+                  <div class="time-label">${period} min</div>
+                  <div class="time-bar-container">
+                    <div class="time-bar-fill time-bar-fill-danger" style="width: ${data.percentage}%"></div>
+                  </div>
+                  <div class="time-value">${data.count} (${data.percentage.toFixed(1)}%)</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    
+    container.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading team statistics:', err);
+    container.innerHTML = '<div class="team-details-loading"><div>Failed to load statistics</div></div>';
   }
 }

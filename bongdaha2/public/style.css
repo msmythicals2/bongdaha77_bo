@@ -6682,3 +6682,439 @@ html {
   border-color: rgba(239, 68, 68, 0.5);
   transform: scale(1.05);
 }
+
+
+/* ============================================
+   Enhanced Team Details Info Styles
+   ============================================ */
+
+.team-info-container {
+    padding: 20px;
+}
+
+.team-info-section {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 25px;
+}
+
+.team-info-section-title {
+    color: #e2e8f0;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.team-info-section-title i {
+    color: #00e676;
+    font-size: 18px;
+}
+
+/* Team Info Grid - Updated */
+.team-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.team-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+}
+
+.team-info-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.team-info-item-full {
+    grid-column: 1 / -1;
+}
+
+.team-info-label {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.team-info-label i {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.team-info-value {
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* Coach Info Card */
+.coach-info-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.coach-photo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid rgba(0, 230, 118, 0.3);
+}
+
+.coach-details h4 {
+    color: #e2e8f0;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 10px 0;
+}
+
+.coach-details p {
+    color: #94a3b8;
+    font-size: 13px;
+    margin: 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.coach-details i {
+    color: #64748b;
+    font-size: 12px;
+}
+
+/* Venue Image */
+.venue-image-container {
+    margin-top: 20px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.venue-image {
+    width: 100%;
+    height: auto;
+    max-height: 400px;
+    object-fit: cover;
+    display: block;
+}
+
+/* Trophies Grid */
+.trophies-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.trophy-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background: rgba(255, 215, 0, 0.05);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.trophy-card:hover {
+    background: rgba(255, 215, 0, 0.08);
+    border-color: rgba(255, 215, 0, 0.3);
+    transform: translateY(-2px);
+}
+
+.trophy-icon {
+    font-size: 32px;
+    color: #ffd700;
+    min-width: 40px;
+    text-align: center;
+}
+
+.trophy-details h4 {
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 0 5px 0;
+}
+
+.trophy-season {
+    color: #94a3b8;
+    font-size: 12px;
+    margin: 3px 0;
+}
+
+.trophy-times {
+    color: #ffd700;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 3px 0;
+}
+
+/* Sidelined Players */
+.sidelined-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sidelined-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+}
+
+.sidelined-card.injury {
+    background: rgba(255, 59, 59, 0.05);
+    border-color: rgba(255, 59, 59, 0.2);
+}
+
+.sidelined-card.suspension {
+    background: rgba(255, 193, 7, 0.05);
+    border-color: rgba(255, 193, 7, 0.2);
+}
+
+.sidelined-card:hover {
+    transform: translateX(5px);
+}
+
+.sidelined-icon {
+    font-size: 28px;
+    min-width: 40px;
+    text-align: center;
+}
+
+.sidelined-card.injury .sidelined-icon {
+    color: #ff3b3b;
+}
+
+.sidelined-card.suspension .sidelined-icon {
+    color: #ffc107;
+}
+
+.sidelined-details h4 {
+    color: #e2e8f0;
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 5px 0;
+}
+
+.sidelined-reason {
+    color: #94a3b8;
+    font-size: 12px;
+    margin: 3px 0;
+    font-weight: 600;
+}
+
+.sidelined-dates {
+    color: #64748b;
+    font-size: 11px;
+    margin: 5px 0 0 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sidelined-dates i {
+    font-size: 10px;
+}
+
+/* Data Source Badge */
+.team-info-source {
+    text-align: center;
+    padding: 12px;
+    background: rgba(0, 230, 118, 0.05);
+    border: 1px solid rgba(0, 230, 118, 0.2);
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.team-info-source i {
+    color: #00e676;
+}
+
+
+/* Unavailable Data Message */
+.team-info-unavailable {
+    padding: 30px;
+    text-align: center;
+    background: rgba(255, 193, 7, 0.05);
+    border: 1px dashed rgba(255, 193, 7, 0.3);
+    border-radius: 10px;
+}
+
+.team-info-unavailable i {
+    font-size: 32px;
+    color: #ffc107;
+    margin-bottom: 15px;
+    display: block;
+}
+
+.team-info-unavailable p {
+    color: #94a3b8;
+    font-size: 13px;
+    margin: 0;
+}
+
+
+/* ============================================
+   Team Statistics Styles
+   ============================================ */
+
+.team-stats-container {
+    padding: 20px;
+}
+
+.stats-section {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 25px;
+}
+
+.stats-section-title {
+    color: #e2e8f0;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stats-section-title i {
+    color: #00e676;
+    font-size: 18px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.stat-card-success {
+    border-color: rgba(0, 230, 118, 0.3);
+    background: rgba(0, 230, 118, 0.05);
+}
+
+.stat-card-danger {
+    border-color: rgba(255, 59, 59, 0.3);
+    background: rgba(255, 59, 59, 0.05);
+}
+
+.stat-label {
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+}
+
+.stat-value {
+    color: #e2e8f0;
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.stat-sublabel {
+    color: #64748b;
+    font-size: 11px;
+}
+
+/* Time Distribution Bars */
+.time-distribution {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.time-bar {
+    display: grid;
+    grid-template-columns: 80px 1fr 120px;
+    align-items: center;
+    gap: 15px;
+}
+
+.time-label {
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+}
+
+.time-bar-container {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    height: 24px;
+    overflow: hidden;
+    position: relative;
+}
+
+.time-bar-fill {
+    background: linear-gradient(90deg, #00e676, #00c965);
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+}
+
+.time-bar-fill-danger {
+    background: linear-gradient(90deg, #ff3b3b, #ff5252);
+}
+
+.time-value {
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 600;
+}

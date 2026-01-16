@@ -105,15 +105,17 @@ const apiFootballHeaders = {
 async function sportmonksRequest(endpoint, params = {}) {
   try {
     const url = `${SPORTMONKS_BASE}${endpoint}`;
+    console.log(`SportMonks request: ${url}`);
     const response = await axios.get(url, {
       params: {
         api_token: SPORTMONKS_KEY,
         ...params
-      }
+      },
+      timeout: 10000
     });
     return response.data;
   } catch (err) {
-    console.error(`SportMonks API error (${endpoint}):`, err.message);
+    console.error(`SportMonks API error (${endpoint}):`, err.response?.status, err.response?.statusText || err.message);
     return null;
   }
 }
@@ -149,6 +151,267 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ============================================
+// SPORTMONKS TEST ENDPOINT
+// ============================================
+app.get("/api/sportmonks/test", async (req, res) => {
+  try {
+    // Test basic connectivity
+    const tests = [];
+    
+    // Test 1: Get all teams (should work)
+    try {
+      const teamsData = await sportmonksRequest('/teams', { per_page: 5 });
+      tests.push({
+        endpoint: '/teams',
+        status: teamsData ? 'success' : 'failed',
+        data: teamsData ? `Found ${teamsData.data?.length || 0} teams` : 'No data'
+      });
+    } catch (e) {
+      tests.push({
+        endpoint: '/teams',
+        status: 'error',
+        error: e.message
+      });
+    }
+    
+    // Test 2: Search teams
+    try {
+      const searchData = await sportmonksRequest('/teams/search/Manchester');
+      tests.push({
+        endpoint: '/teams/search/Manchester',
+        status: searchData ? 'success' : 'failed',
+        data: searchData ? `Found ${searchData.data?.length || 0} teams` : 'No data'
+      });
+    } catch (e) {
+      tests.push({
+        endpoint: '/teams/search/Manchester',
+        status: 'error',
+        error: e.message
+      });
+    }
+    
+    // Test 3: Get specific team
+    try {
+      const teamData = await sportmonksRequest('/teams/14');
+      tests.push({
+        endpoint: '/teams/14',
+        status: teamData ? 'success' : 'failed',
+        data: teamData ? `Team: ${teamData.data?.name || 'Unknown'}` : 'No data'
+      });
+    } catch (e) {
+      tests.push({
+        endpoint: '/teams/14',
+        status: 'error',
+        error: e.message
+      });
+    }
+    
+    // Test 4: Get team with statistics includes
+    try {
+      const teamStatsData = await sportmonksRequest('/teams/14', {
+        include: 'statistics'
+      });
+      tests.push({
+        endpoint: '/teams/14?include=statistics',
+        status: teamStatsData ? 'success' : 'failed',
+        data: teamStatsData ? `Has statistics: ${!!teamStatsData.data?.statistics}` : 'No data'
+      });
+    } catch (e) {
+      tests.push({
+        endpoint: '/teams/14?include=statistics',
+        status: 'error',
+        error: e.message
+      });
+    }
+    
+    // Test 5: Get players
+    try {
+      const playersData = await sportmonksRequest('/players', { per_page: 5 });
+      tests.push({
+        endpoint: '/players',
+        status: playersData ? 'success' : 'failed',
+        data: playersData ? `Found ${playersData.data?.length || 0} players` : 'No data'
+      });
+    } catch (e) {
+      tests.push({
+        endpoint: '/players',
+        status: 'error',
+        error: e.message
+      });
+    }
+    
+    // Test 6: Get fixtures
+    try {
+      const fixturesData = await sportmonksRequest('/fixtures', { per_page: 5 });
+      tests.push({
+        endpoint: '/fixtures',
+        status: fixturesData ? 'success' : 'failed',
+        data: fixturesData ? `Found ${fixturesData.data?.length || 0} fixtures` : 'No data'
+      });
+    } catch (e) {
+      tests.push({
+        endpoint: '/fixtures',
+        status: 'error',
+        error: e.message
+      });
+    }
+    
+    // Test 7: Get leagues
+    try {
+      const leaguesData = await sportmonksRequest('/leagues', { per_page: 5 });
+      tests.push({
+        endpoint: '/leagues',
+        status: leaguesData ? 'success' : 'failed',
+        data: leaguesData ? `Found ${leaguesData.data?.length || 0} leagues` : 'No data'
+      });
+    } catch (e) {
+      tests.push({
+        endpoint: '/leagues',
+        status: 'error',
+        error: e.message
+      });
+    }
+    
+    res.json({
+      message: 'SportMonks API Test Results',
+      api_key_configured: !!SPORTMONKS_KEY,
+      base_url: SPORTMONKS_BASE,
+      tests
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Test SportMonks statistics details
+app.get("/api/sportmonks/test-stats-details", async (req, res) => {
+  try {
+    const results = {};
+    
+    // Test 1: Get team statistics with different includes
+    const teamId = 14; // Manchester United
+    
+    // Try different include combinations
+    const includeOptions = [
+      'statistics',
+      'statistics.details',
+      'statistics.type',
+      'statistics.details;statistics.type'
+    ];
+    
+    for (const include of includeOptions) {
+      try {
+        const data = await sportmonksRequest(`/teams/${teamId}`, { include });
+        results[include] = {
+          has_statistics: !!data?.data?.statistics,
+          statistics_count: data?.data?.statistics?.length || 0,
+          first_stat: data?.data?.statistics?.[0] || null
+        };
+      } catch (e) {
+        results[include] = { error: e.message };
+      }
+    }
+    
+    // Test 2: Try to get statistics directly
+    try {
+      const statsData = await sportmonksRequest(`/statistics/teams/${teamId}`);
+      results['direct_statistics'] = {
+        success: !!statsData,
+        data: statsData
+      };
+    } catch (e) {
+      results['direct_statistics'] = { error: e.message };
+    }
+    
+    res.json({
+      message: 'SportMonks Statistics Details Test',
+      team_id: teamId,
+      results
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Test available statistics types
+app.get("/api/sportmonks/test-statistics", async (req, res) => {
+  try {
+    const results = {
+      team_statistics: null,
+      player_statistics: null,
+      fixture_statistics: null,
+      season_statistics: null
+    };
+    
+    // Test team statistics (Manchester United - ID 14)
+    try {
+      const teamData = await sportmonksRequest('/teams/14', {
+        include: 'statistics'
+      });
+      results.team_statistics = {
+        available: !!teamData?.data?.statistics,
+        count: teamData?.data?.statistics ? teamData.data.statistics.length : 0,
+        sample: teamData?.data?.statistics ? teamData.data.statistics.slice(0, 5) : []
+      };
+    } catch (e) {
+      results.team_statistics = { error: e.message };
+    }
+    
+    // Test player statistics
+    try {
+      const playersData = await sportmonksRequest('/players', {
+        per_page: 1,
+        include: 'statistics'
+      });
+      results.player_statistics = {
+        available: !!playersData?.data?.[0]?.statistics,
+        count: playersData?.data?.[0]?.statistics ? playersData.data[0].statistics.length : 0,
+        sample: playersData?.data?.[0]?.statistics ? playersData.data[0].statistics.slice(0, 5) : []
+      };
+    } catch (e) {
+      results.player_statistics = { error: e.message };
+    }
+    
+    // Test fixture statistics
+    try {
+      const fixturesData = await sportmonksRequest('/fixtures', {
+        per_page: 1,
+        include: 'statistics'
+      });
+      results.fixture_statistics = {
+        available: !!fixturesData?.data?.[0]?.statistics,
+        count: fixturesData?.data?.[0]?.statistics ? fixturesData.data[0].statistics.length : 0,
+        sample: fixturesData?.data?.[0]?.statistics ? fixturesData.data[0].statistics.slice(0, 5) : []
+      };
+    } catch (e) {
+      results.fixture_statistics = { error: e.message };
+    }
+    
+    // Test season statistics
+    try {
+      const seasonsData = await sportmonksRequest('/seasons', {
+        per_page: 1,
+        include: 'statistics'
+      });
+      results.season_statistics = {
+        available: !!seasonsData?.data?.[0]?.statistics,
+        count: seasonsData?.data?.[0]?.statistics ? seasonsData.data[0].statistics.length : 0,
+        sample: seasonsData?.data?.[0]?.statistics ? seasonsData.data[0].statistics.slice(0, 5) : []
+      };
+    } catch (e) {
+      results.season_statistics = { error: e.message };
+    }
+    
+    res.json({
+      message: 'SportMonks Statistics Availability Test',
+      results
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ============================================
@@ -373,7 +636,75 @@ app.get("/api/teams/search", async (req, res) => {
 });
 
 // ============================================
-// TEAM INFO (SportMonks priority, fallback API-Football)
+// TEAM STATISTICS (SportMonks)
+// ============================================
+app.get("/api/teams/:id/statistics", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const season = req.query.season || 2025;
+    
+    const cacheKey = getCacheKey('team-statistics', { id, season });
+    const cached = getCache(cacheKey);
+    if (cached) return res.json(cached);
+
+    // Get team name from API-Football first
+    const apiFootballData = await apiFootballRequest('/teams', { id });
+    const teamData = apiFootballData?.response?.[0];
+    
+    if (!teamData) {
+      return res.json({ statistics: null, source: 'none' });
+    }
+    
+    const teamName = teamData.team.name;
+    
+    // Search for team in SportMonks
+    const searchData = await sportmonksRequest('/teams/search/' + teamName);
+    
+    if (!searchData || !searchData.data || searchData.data.length === 0) {
+      return res.json({ statistics: null, source: 'not-found' });
+    }
+    
+    const exactMatch = searchData.data.find(t => 
+      t.name.toLowerCase() === teamName.toLowerCase()
+    );
+    const sportmonksTeam = exactMatch || searchData.data[0];
+    const sportmonksId = sportmonksTeam.id;
+    
+    console.log(`Getting statistics for SportMonks team ${sportmonksId}`);
+    
+    // Get team statistics with details
+    const teamStatsData = await sportmonksRequest(`/teams/${sportmonksId}`, {
+      include: 'statistics.details'
+    });
+    
+    if (!teamStatsData || !teamStatsData.data || !teamStatsData.data.statistics) {
+      return res.json({ statistics: null, source: 'no-stats' });
+    }
+    
+    // Find the most recent season statistics
+    const stats = teamStatsData.data.statistics;
+    const latestStat = stats.find(s => s.has_values && s.details && s.details.length > 0) || stats[0];
+    
+    console.log(`Found statistics with ${latestStat?.details?.length || 0} detail records`);
+    
+    const result = {
+      statistics: latestStat,
+      all_seasons: stats.map(s => ({ id: s.id, season_id: s.season_id, has_values: s.has_values })),
+      team_name: teamData.team.name,
+      sportmonks_id: sportmonksId,
+      source: 'sportmonks'
+    };
+    
+    setCache(cacheKey, result, CACHE_TTL.TEAMS);
+    res.json(result);
+  } catch (err) {
+    console.error("team statistics error:", err.message);
+    res.json({ statistics: null, source: 'error', error: err.message });
+  }
+});
+
+// ============================================
+// TEAM INFO (API-Football basic info)
 // ============================================
 app.get("/api/teams/:id/info", async (req, res) => {
   try {
@@ -383,48 +714,42 @@ app.get("/api/teams/:id/info", async (req, res) => {
     const cached = getCache(cacheKey);
     if (cached) return res.json(cached);
 
-    // Try SportMonks first
-    const sportmonksData = await sportmonksRequest(`/teams/${id}`, {
-      include: 'venue;country'
-    });
+    // Get team info from API-Football
+    const apiFootballData = await apiFootballRequest('/teams', { id });
+    const teamData = apiFootballData?.response?.[0];
     
-    if (sportmonksData && sportmonksData.data) {
-      const team = sportmonksData.data;
-      const result = {
-        team: {
-          id: team.id,
-          name: team.name,
-          code: team.short_code,
-          country: team.country?.name || '',
-          founded: team.founded || null,
-          logo: team.image_path || ''
-        },
-        venue: {
-          id: team.venue_id,
-          name: team.venue?.name || '',
-          address: team.venue?.address || '',
-          city: team.venue?.city_name || '',
-          capacity: team.venue?.capacity || null,
-          surface: team.venue?.surface || '',
-          image: team.venue?.image_path || ''
-        }
-      };
-      
-      setCache(cacheKey, result, CACHE_TTL.TEAMS);
-      return res.json(result);
+    if (!teamData) {
+      return res.json({ team: {}, venue: {}, source: 'none' });
     }
     
-    // Fallback to API-Football
-    console.log(`SportMonks failed for team ${id}, using API-Football...`);
-    const data = await apiFootballRequest('/teams', { id });
-    const teamData = data?.response?.[0];
-    const result = { team: teamData?.team || {}, venue: teamData?.venue || {} };
+    const result = {
+      team: {
+        id: teamData.team.id,
+        name: teamData.team.name,
+        code: teamData.team.code,
+        country: teamData.team.country,
+        founded: teamData.team.founded,
+        logo: teamData.team.logo,
+        national: teamData.team.national || false,
+        type: teamData.team.national ? 'national' : 'domestic'
+      },
+      venue: {
+        id: teamData.venue?.id,
+        name: teamData.venue?.name || '',
+        address: teamData.venue?.address || '',
+        city: teamData.venue?.city || '',
+        capacity: teamData.venue?.capacity || null,
+        surface: teamData.venue?.surface || '',
+        image: teamData.venue?.image || ''
+      },
+      source: 'api-football'
+    };
     
     setCache(cacheKey, result, CACHE_TTL.TEAMS);
     res.json(result);
   } catch (err) {
     console.error("team info error:", err.message);
-    res.json({ team: {}, venue: {} });
+    res.json({ team: {}, venue: {}, source: 'error' });
   }
 });
 
@@ -506,15 +831,21 @@ app.get("/api/teams/:id/players", async (req, res) => {
 
     // Try SportMonks first for squad data
     const sportmonksData = await sportmonksRequest(`/squads/seasons/${season}/teams/${id}`, {
-      include: 'player;player.position;player.nationality'
+      include: 'player;player.position;player.nationality;player.detailedPosition;player.statistics.details'
     });
     
     if (sportmonksData && sportmonksData.data && sportmonksData.data.length > 0) {
       console.log(`SportMonks returned ${sportmonksData.data.length} players`);
       
-      // Convert SportMonks format to API-Football format
+      // Convert SportMonks format to enhanced format
       const players = sportmonksData.data.map(squad => {
         const player = squad.player;
+        const stats = player.statistics && player.statistics.length > 0 ? player.statistics[0] : null;
+        const details = stats?.details || [];
+        
+        // Extract detailed statistics
+        const findStat = (typeId) => details.find(d => d.type_id === typeId);
+        
         return {
           player: {
             id: player.player_id,
@@ -539,24 +870,44 @@ app.get("/api/teams/:id/players", async (req, res) => {
               logo: ''
             },
             games: {
-              appearences: squad.appearences || 0,
+              appearences: findStat(52)?.value?.all?.count || squad.appearences || 0,
               lineups: squad.lineups || 0,
-              minutes: squad.minutes || 0,
+              minutes: findStat(86)?.value?.total || squad.minutes || 0,
               number: squad.jersey_number || null,
-              position: player.position?.name || squad.position || 'Unknown',
-              rating: null,
+              position: player.detailedPosition?.name || player.position?.name || squad.position || 'Unknown',
+              rating: findStat(127)?.value?.average || null,
               captain: squad.captain || false
             },
             goals: {
-              total: squad.goals || 0,
-              conceded: null,
-              assists: squad.assists || 0,
-              saves: null
+              total: findStat(52)?.value?.all?.count || squad.goals || 0,
+              conceded: findStat(88)?.value?.total || null,
+              assists: findStat(79)?.value?.total || squad.assists || 0,
+              saves: findStat(91)?.value?.total || null
+            },
+            shots: {
+              total: findStat(42)?.value?.total || null,
+              on: findStat(43)?.value?.total || null,
+              accuracy: findStat(43)?.value?.percentage || null
+            },
+            passes: {
+              total: findStat(84)?.value?.total || null,
+              accuracy: findStat(84)?.value?.percentage || null,
+              key: findStat(85)?.value?.total || null
+            },
+            tackles: {
+              total: findStat(71)?.value?.total || null,
+              blocks: findStat(72)?.value?.total || null,
+              interceptions: findStat(73)?.value?.total || null
             },
             cards: {
-              yellow: squad.yellowcards || 0,
+              yellow: findStat(83)?.value?.total || squad.yellowcards || 0,
               yellowred: squad.yellowred || 0,
-              red: squad.redcards || 0
+              red: findStat(82)?.value?.total || squad.redcards || 0
+            },
+            penalty: {
+              scored: findStat(47)?.value?.scored || null,
+              missed: findStat(47)?.value?.missed || null,
+              saved: findStat(91)?.value?.penalty_saves || null
             }
           }]
         };

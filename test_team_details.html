@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试增强的球队详情</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #0d0f11;
+            color: #e2e8f0;
+        }
+        h1 {
+            color: #00e676;
+        }
+        .test-section {
+            background: #1a1e22;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: 1px solid #2d3439;
+        }
+        button {
+            background: #00e676;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        button:hover {
+            background: #00c965;
+        }
+        .result {
+            background: #0d0f11;
+            border: 1px solid #2d3439;
+            padding: 20px;
+            margin-top: 15px;
+            border-radius: 8px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .loading {
+            color: #94a3b8;
+            font-style: italic;
+        }
+        .error {
+            color: #ff3b3b;
+            font-weight: bold;
+        }
+        .success {
+            color: #00e676;
+            font-weight: bold;
+        }
+        pre {
+            background: #000;
+            color: #00e676;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .info-card {
+            background: rgba(0, 230, 118, 0.05);
+            border: 1px solid rgba(0, 230, 118, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .info-card h3 {
+            margin: 0 0 10px 0;
+            color: #00e676;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .info-label {
+            color: #94a3b8;
+        }
+        .info-value {
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        img {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔬 测试增强的球队详情功能</h1>
+    <p>测试 SportMonks 提供的丰富球队信息</p>
+
+    <div class="test-section">
+        <h2>测试球队详情 API</h2>
+        <p>点击按钮测试不同球队的详细信息（包括教练、奖杯、伤病等）</p>
+        
+        <button onclick="testTeamDetails(33)">Manchester United (33)</button>
+        <button onclick="testTeamDetails(9568)">Inter Miami CF (9568)</button>
+        <button onclick="testTeamDetails(529)">Barcelona (529)</button>
+        <button onclick="testTeamDetails(541)">Real Madrid (541)</button>
+        <button onclick="testTeamDetails(50)">Manchester City (50)</button>
+        <button onclick="testTeamDetails(2932)">Al-Hilal (2932)</button>
+        <button onclick="testTeamDetails(3670)">Hanoi FC (3670)</button>
+        
+        <div id="result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 预期看到的新信息</h2>
+        <div class="info-card">
+            <h3>✅ 基本信息</h3>
+            <div class="info-item">
+                <span class="info-label">成立年份</span>
+                <span class="info-value">Founded year</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">国家</span>
+                <span class="info-value">Country</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">球队代码</span>
+                <span class="info-value">Team code</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">类型</span>
+                <span class="info-value">Club/National</span>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h3>👔 主教练信息</h3>
+            <div class="info-item">
+                <span class="info-label">姓名</span>
+                <span class="info-value">Coach name</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">照片</span>
+                <span class="info-value">Coach photo</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">国籍</span>
+                <span class="info-value">Nationality</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">年龄</span>
+                <span class="info-value">Age</span>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h3>🏟️ 球场信息</h3>
+            <div class="info-item">
+                <span class="info-label">球场名称</span>
+                <span class="info-value">Stadium name</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">城市</span>
+                <span class="info-value">City</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">容量</span>
+                <span class="info-value">Capacity</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">草皮类型</span>
+                <span class="info-value">Surface type</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">地址</span>
+                <span class="info-value">Full address</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">球场照片</span>
+                <span class="info-value">Stadium image</span>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h3>🏆 奖杯和荣誉</h3>
+            <div class="info-item">
+                <span class="info-label">联赛名称</span>
+                <span class="info-value">League name</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">赛季</span>
+                <span class="info-value">Season</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">次数</span>
+                <span class="info-value">Times won</span>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h3>🚑 伤病/停赛球员</h3>
+            <div class="info-item">
+                <span class="info-label">球员姓名</span>
+                <span class="info-value">Player name</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">原因</span>
+                <span class="info-value">Injury/Suspension</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">开始日期</span>
+                <span class="info-value">Start date</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">结束日期</span>
+                <span class="info-value">End date</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+
+        async function testTeamDetails(teamId) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p class="loading">正在加载球队详情: ' + teamId + '...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/teams/${teamId}/info`);
+                const data = await response.json();
+                
+                if (!data.team || !data.team.name) {
+                    resultDiv.innerHTML = '<p class="error">未找到球队信息</p>';
+                    return;
+                }
+                
+                let html = '<p class="success">✅ 成功获取球队详情！</p>';
+                
+                // Team Basic Info
+                html += '<div class="info-card">';
+                html += '<h3>🛡️ 球队基本信息</h3>';
+                html += `<div class="info-item"><span class="info-label">球队名称</span><span class="info-value">${data.team.name}</span></div>`;
+                html += `<div class="info-item"><span class="info-label">成立年份</span><span class="info-value">${data.team.founded || 'N/A'}</span></div>`;
+                html += `<div class="info-item"><span class="info-label">国家</span><span class="info-value">${data.team.country || 'N/A'}</span></div>`;
+                html += `<div class="info-item"><span class="info-label">球队代码</span><span class="info-value">${data.team.code || 'N/A'}</span></div>`;
+                html += `<div class="info-item"><span class="info-label">类型</span><span class="info-value">${data.team.national ? 'National Team' : 'Club Team'}</span></div>`;
+                html += '</div>';
+                
+                // Coach Info
+                if (data.coach) {
+                    html += '<div class="info-card">';
+                    html += '<h3>👔 主教练信息</h3>';
+                    if (data.coach.photo) {
+                        html += `<img src="${data.coach.photo}" alt="${data.coach.name}" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;">`;
+                    }
+                    html += `<div class="info-item"><span class="info-label">姓名</span><span class="info-value">${data.coach.name}</span></div>`;
+                    html += `<div class="info-item"><span class="info-label">国籍</span><span class="info-value">${data.coach.nationality || 'N/A'}</span></div>`;
+                    html += `<div class="info-item"><span class="info-label">年龄</span><span class="info-value">${data.coach.age || 'N/A'}</span></div>`;
+                    html += '</div>';
+                } else {
+                    html += '<div class="info-card"><h3>👔 主教练信息</h3><p>暂无教练信息</p></div>';
+                }
+                
+                // Venue Info
+                html += '<div class="info-card">';
+                html += '<h3>🏟️ 球场信息</h3>';
+                html += `<div class="info-item"><span class="info-label">球场名称</span><span class="info-value">${data.venue.name || 'N/A'}</span></div>`;
+                html += `<div class="info-item"><span class="info-label">城市</span><span class="info-value">${data.venue.city || 'N/A'}</span></div>`;
+                html += `<div class="info-item"><span class="info-label">容量</span><span class="info-value">${data.venue.capacity ? data.venue.capacity.toLocaleString() : 'N/A'}</span></div>`;
+                html += `<div class="info-item"><span class="info-label">草皮</span><span class="info-value">${data.venue.surface || 'N/A'}</span></div>`;
+                if (data.venue.address) {
+                    html += `<div class="info-item"><span class="info-label">地址</span><span class="info-value">${data.venue.address}</span></div>`;
+                }
+                if (data.venue.image) {
+                    html += `<img src="${data.venue.image}" alt="${data.venue.name}" style="margin-top: 15px;">`;
+                }
+                html += '</div>';
+                
+                // Trophies
+                if (data.trophies && data.trophies.length > 0) {
+                    html += '<div class="info-card">';
+                    html += '<h3>🏆 奖杯和荣誉 (' + data.trophies.length + ')</h3>';
+                    data.trophies.forEach(trophy => {
+                        html += `<div class="info-item">`;
+                        html += `<span class="info-label">${trophy.league}</span>`;
+                        html += `<span class="info-value">${trophy.season || ''} ${trophy.times > 1 ? '(' + trophy.times + 'x)' : ''}</span>`;
+                        html += `</div>`;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="info-card"><h3>🏆 奖杯和荣誉</h3><p>暂无奖杯数据</p></div>';
+                }
+                
+                // Sidelined Players
+                if (data.sidelined && data.sidelined.length > 0) {
+                    html += '<div class="info-card">';
+                    html += '<h3>🚑 伤病/停赛球员 (' + data.sidelined.length + ')</h3>';
+                    data.sidelined.forEach(player => {
+                        const startDate = player.start_date ? new Date(player.start_date).toLocaleDateString('zh-CN') : 'N/A';
+                        const endDate = player.end_date ? new Date(player.end_date).toLocaleDateString('zh-CN') : 'N/A';
+                        html += `<div class="info-item">`;
+                        html += `<span class="info-label">${player.player_name} (${player.reason})</span>`;
+                        html += `<span class="info-value">${startDate} - ${endDate}</span>`;
+                        html += `</div>`;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="info-card"><h3>🚑 伤病/停赛球员</h3><p>暂无伤病数据</p></div>';
+                }
+                
+                // Data Source
+                html += '<div class="info-card">';
+                html += `<h3>📊 数据源</h3>`;
+                html += `<p><strong>${data.source || 'unknown'}</strong></p>`;
+                if (data.source === 'sportmonks') {
+                    html += '<p style="color: #00e676;">✅ 使用 SportMonks 增强数据</p>';
+                } else {
+                    html += '<p style="color: #ffc107;">⚠️ 使用 API-Football 数据（SportMonks 不可用）</p>';
+                }
+                html += '</div>';
+                
+                // Raw JSON
+                html += '<h3 style="margin-top: 20px;">原始 JSON 数据:</h3>';
+                html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">错误: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
