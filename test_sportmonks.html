@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SportMonks API 测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #666;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .result {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .player-card {
+            display: inline-block;
+            width: 200px;
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            background: white;
+        }
+        .player-card img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .team-card {
+            display: inline-block;
+            width: 250px;
+            margin: 10px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+        }
+        .team-card img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔬 SportMonks API 测试工具</h1>
+    <p>测试双 API 系统中的 SportMonks 集成</p>
+
+    <!-- Test 1: Search Teams -->
+    <div class="test-section">
+        <h2>1. 搜索球队 (SportMonks → API-Football)</h2>
+        <button onclick="testTeamSearch('Manchester')">搜索 Manchester</button>
+        <button onclick="testTeamSearch('Real Madrid')">搜索 Real Madrid</button>
+        <button onclick="testTeamSearch('Barcelona')">搜索 Barcelona</button>
+        <button onclick="testTeamSearch('Inter Miami')">搜索 Inter Miami</button>
+        <div id="team-search-result" class="result"></div>
+    </div>
+
+    <!-- Test 2: Team Info -->
+    <div class="test-section">
+        <h2>2. 球队详细信息 (SportMonks → API-Football)</h2>
+        <button onclick="testTeamInfo(33)">Manchester United (33)</button>
+        <button onclick="testTeamInfo(9568)">Inter Miami CF (9568)</button>
+        <button onclick="testTeamInfo(529)">Barcelona (529)</button>
+        <button onclick="testTeamInfo(3670)">Hanoi FC (3670)</button>
+        <div id="team-info-result" class="result"></div>
+    </div>
+
+    <!-- Test 3: Team Players -->
+    <div class="test-section">
+        <h2>3. 球队球员阵容 (SportMonks → API-Football)</h2>
+        <button onclick="testTeamPlayers(9568)">Inter Miami CF 球员</button>
+        <button onclick="testTeamPlayers(33)">Manchester United 球员</button>
+        <button onclick="testTeamPlayers(3670)">Hanoi FC 球员</button>
+        <button onclick="testTeamPlayers(2932)">Al-Hilal 球员</button>
+        <div id="team-players-result" class="result"></div>
+    </div>
+
+    <!-- Test 4: Player Search -->
+    <div class="test-section">
+        <h2>4. 搜索球员 (SportMonks → API-Football)</h2>
+        <button onclick="testPlayerSearch('Messi')">搜索 Messi</button>
+        <button onclick="testPlayerSearch('Ronaldo')">搜索 Ronaldo</button>
+        <button onclick="testPlayerSearch('Neymar')">搜索 Neymar</button>
+        <button onclick="testPlayerSearch('Mbappé')">搜索 Mbappé</button>
+        <div id="player-search-result" class="result"></div>
+    </div>
+
+    <!-- Test 5: Cache Stats -->
+    <div class="test-section">
+        <h2>5. 缓存统计</h2>
+        <button onclick="testCacheStats()">查看缓存统计</button>
+        <button onclick="testCacheClear()">清空缓存</button>
+        <div id="cache-result" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+
+        async function testTeamSearch(name) {
+            const resultDiv = document.getElementById('team-search-result');
+            resultDiv.innerHTML = '<p class="loading">正在搜索球队: ' + name + '...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/teams/search?name=${encodeURIComponent(name)}`);
+                const teams = await response.json();
+                
+                if (teams.length === 0) {
+                    resultDiv.innerHTML = '<p class="error">未找到球队</p>';
+                    return;
+                }
+                
+                let html = `<p class="success">找到 ${teams.length} 支球队</p>`;
+                teams.slice(0, 5).forEach(item => {
+                    const team = item.team;
+                    html += `
+                        <div class="team-card">
+                            <img src="${team.logo}" alt="${team.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22>⚽</text></svg>'">
+                            <h3>${team.name}</h3>
+                            <p>ID: ${team.id}</p>
+                            <p>国家: ${team.country}</p>
+                            <p>成立: ${team.founded || 'N/A'}</p>
+                        </div>
+                    `;
+                });
+                
+                html += '<h4>原始数据:</h4><pre>' + JSON.stringify(teams.slice(0, 2), null, 2) + '</pre>';
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">错误: ' + error.message + '</p>';
+            }
+        }
+
+        async function testTeamInfo(teamId) {
+            const resultDiv = document.getElementById('team-info-result');
+            resultDiv.innerHTML = '<p class="loading">正在获取球队信息: ' + teamId + '...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/teams/${teamId}/info`);
+                const data = await response.json();
+                
+                if (!data.team || !data.team.name) {
+                    resultDiv.innerHTML = '<p class="error">未找到球队信息</p>';
+                    return;
+                }
+                
+                let html = `
+                    <div class="team-card">
+                        <img src="${data.team.logo}" alt="${data.team.name}">
+                        <h3>${data.team.name}</h3>
+                        <p><strong>ID:</strong> ${data.team.id}</p>
+                        <p><strong>国家:</strong> ${data.team.country}</p>
+                        <p><strong>成立:</strong> ${data.team.founded || 'N/A'}</p>
+                        <p><strong>球场:</strong> ${data.venue.name || 'N/A'}</p>
+                        <p><strong>城市:</strong> ${data.venue.city || 'N/A'}</p>
+                        <p><strong>容量:</strong> ${data.venue.capacity || 'N/A'}</p>
+                    </div>
+                `;
+                
+                html += '<h4>原始数据:</h4><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">错误: ' + error.message + '</p>';
+            }
+        }
+
+        async function testTeamPlayers(teamId) {
+            const resultDiv = document.getElementById('team-players-result');
+            resultDiv.innerHTML = '<p class="loading">正在获取球队球员: ' + teamId + '...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/teams/${teamId}/players`);
+                const data = await response.json();
+                
+                if (!data.players || data.players.length === 0) {
+                    resultDiv.innerHTML = '<p class="error">未找到球员数据</p>';
+                    return;
+                }
+                
+                let html = `<p class="success">找到 ${data.players.length} 名球员 (赛季: ${data.season}, 数据源: ${data.source || 'unknown'})</p>`;
+                
+                data.players.slice(0, 10).forEach(item => {
+                    const player = item.player;
+                    const stats = item.statistics && item.statistics.length > 0 ? item.statistics[0] : null;
+                    const jerseyNumber = stats?.games?.number || '-';
+                    const position = stats?.games?.position || 'Unknown';
+                    const goals = stats?.goals?.total || 0;
+                    const assists = stats?.goals?.assists || 0;
+                    
+                    html += `
+                        <div class="player-card">
+                            <img src="${player.photo}" alt="${player.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22>👤</text></svg>'">
+                            <h4>${player.name}</h4>
+                            <p>号码: ${jerseyNumber}</p>
+                            <p>位置: ${position}</p>
+                            <p>年龄: ${player.age || 'N/A'}</p>
+                            <p>⚽ ${goals} | 🎯 ${assists}</p>
+                        </div>
+                    `;
+                });
+                
+                html += '<h4>原始数据 (前2名球员):</h4><pre>' + JSON.stringify(data.players.slice(0, 2), null, 2) + '</pre>';
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">错误: ' + error.message + '</p>';
+            }
+        }
+
+        async function testPlayerSearch(name) {
+            const resultDiv = document.getElementById('player-search-result');
+            resultDiv.innerHTML = '<p class="loading">正在搜索球员: ' + name + '...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/players/search?name=${encodeURIComponent(name)}`);
+                const data = await response.json();
+                
+                if (!data.players || data.players.length === 0) {
+                    resultDiv.innerHTML = '<p class="error">未找到球员</p>';
+                    return;
+                }
+                
+                let html = `<p class="success">找到 ${data.players.length} 名球员 (数据源: ${data.source || 'unknown'})</p>`;
+                
+                data.players.slice(0, 10).forEach(item => {
+                    const player = item.player;
+                    html += `
+                        <div class="player-card">
+                            <img src="${player.photo}" alt="${player.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22>👤</text></svg>'">
+                            <h4>${player.name}</h4>
+                            <p>ID: ${player.id}</p>
+                            <p>年龄: ${player.age || 'N/A'}</p>
+                            <p>国籍: ${player.nationality || 'N/A'}</p>
+                        </div>
+                    `;
+                });
+                
+                html += '<h4>原始数据 (前2名球员):</h4><pre>' + JSON.stringify(data.players.slice(0, 2), null, 2) + '</pre>';
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">错误: ' + error.message + '</p>';
+            }
+        }
+
+        async function testCacheStats() {
+            const resultDiv = document.getElementById('cache-result');
+            resultDiv.innerHTML = '<p class="loading">正在获取缓存统计...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/cache/stats`);
+                const data = await response.json();
+                
+                let html = `
+                    <p class="success">缓存项数量: ${data.size}</p>
+                    <h4>缓存键列表:</h4>
+                    <pre>${JSON.stringify(data.keys, null, 2)}</pre>
+                `;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">错误: ' + error.message + '</p>';
+            }
+        }
+
+        async function testCacheClear() {
+            const resultDiv = document.getElementById('cache-result');
+            resultDiv.innerHTML = '<p class="loading">正在清空缓存...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/cache/clear`);
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `<p class="success">${data.message} (当前大小: ${data.size})</p>`;
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">错误: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
